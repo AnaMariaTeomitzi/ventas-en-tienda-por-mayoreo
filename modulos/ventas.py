@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import os
-from .base_datos import VENTAS_FILE, obtener_clientes_recurrentes_lista
+from .base_datos import obtener_clientes_recurrentes_lista, guardar_venta_db, obtener_historial_ventas
 
 def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial,sucursal_activa="Tienda Chela"):
     st.title("🛒 Control de Ventas")
