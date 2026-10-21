@@ -3,8 +3,13 @@ import pandas as pd
 
 # Importar funciones desde la carpeta modulos
 from modulos.base_datos import (
-    obtener_catalogo, CATALOGO_FILE, HISTORIAL_COSTOS_FILE, 
-    VENTAS_FILE, COMPRAS_FILE, limpiar_y_preparar_catalogo, registrar_en_historial
+    obtener_catalogo, 
+    CATALOGO_FILE, 
+    HISTORIAL_COSTOS_FILE,  
+    VENTAS_FILE, 
+    COMPRAS_FILE, 
+    limpiar_y_preparar_catalogo, 
+    registrar_en_historial
 )
 from modulos.usuarios_db import inicializar_usuario_admin_por_defecto, verificar_credenciales
 
