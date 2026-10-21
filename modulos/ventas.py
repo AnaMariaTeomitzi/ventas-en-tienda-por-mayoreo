@@ -232,7 +232,7 @@ total_compras_historico_cliente = 0.0
                         "Cliente": cliente.strip()
                     })
 
-                df_final_venta = pd.DataFrame(items_finales)
+            df_final_venta = pd.DataFrame(items_finales)
                 if os.path.exists(VENTAS_FILE):
                     df_final_venta.to_csv(VENTAS_FILE, mode='a', header=False, index=False)
                 else:
