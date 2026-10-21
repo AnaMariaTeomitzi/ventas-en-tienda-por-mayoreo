@@ -39,12 +39,13 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial,sucurs
     if es_cliente_recurrente_preferente:
         st.success(f"⭐ **Cliente Recurrente Confirmado:** '{cliente.strip()}' cuenta con **Precio Mayoreo 1 garantizado** desde 1 pieza.")
 
-    total_compras_historico_cliente = 0.0
-    if os.path.exists(VENTAS_FILE) and cliente.strip().lower() != "público general":
+total_compras_historico_cliente = 0.0
+    if cliente.strip().lower() != "público general":
         try:
-            df_ventas_hist = pd.read_csv(VENTAS_FILE)
-            df_cte_prev = df_ventas_hist[df_ventas_hist["Cliente"].astype(str).str.strip().str.lower() == cliente.strip().lower()]
-            total_compras_historico_cliente = df_cte_prev["Total_Venta"].sum()
+            df_ventas_hist = obtener_historial_ventas()
+            if not df_ventas_hist.empty and "Cliente" in df_ventas_hist.columns:
+                df_cte_prev = df_ventas_hist[df_ventas_hist["Cliente"].astype(str).str.strip().str.lower() == cliente.strip().lower()]
+                total_compras_historico_cliente = df_cte_prev["Total_Venta"].sum()
         except:
             total_compras_historico_cliente = 0.0
 
