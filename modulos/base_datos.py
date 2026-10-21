@@ -152,3 +152,24 @@ def eliminar_cliente_recurrente(cliente_eliminar):
     except Exception:
         conn.close()
         return False
+        def guardar_venta_db(df_ventas):
+    """Guarda los registros de venta directamente en la tabla de Turso."""
+    conn = conectar_db()
+    try:
+        df_ventas.to_sql("registro_ventas", conn, if_exists="append", index=False)
+        conn.close()
+        return True
+    except Exception as e:
+        conn.close()
+        return False
+
+def obtener_historial_ventas():
+    """Obtiene todas las ventas desde Turso para cálculos de cliente."""
+    conn = conectar_db()
+    try:
+        df = pd.read_sql("SELECT * FROM registro_ventas", conn)
+        conn.close()
+        return df
+    except Exception:
+        conn.close()
+        return pd.DataFrame()
