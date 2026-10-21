@@ -232,13 +232,16 @@ total_compras_historico_cliente = 0.0
                         "Cliente": cliente.strip()
                     })
 
-            df_final_venta = pd.DataFrame(items_finales)
-                if os.path.exists(VENTAS_FILE):
-                    df_final_venta.to_csv(VENTAS_FILE, mode='a', header=False, index=False)
-                else:
-                    df_final_venta.to_csv(VENTAS_FILE, index=False)
+           df_final_venta = pd.DataFrame(items_finales)
+                
+                # Guardar directamente en la tabla de Turso
+                exito = guardar_venta_db(df_final_venta)
 
-                st.success(f"¡Venta registrada con éxito para '{cliente.strip()}'!")
+                if exito:
+                    st.success(f"¡Venta registrada con éxito en Turso para '{cliente.strip()}'!")
+                else:
+                    st.warning("Venta registrada, but hubo un detalle al sincronizar con Turso.")
+
                 st.session_state.carrito = []
                 st.rerun()
     else:
