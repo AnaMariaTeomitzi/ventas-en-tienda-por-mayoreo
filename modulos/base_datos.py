@@ -72,47 +72,15 @@ def limpiar_y_preparar_catalogo(df):
     df = df.dropna(how='all', axis=1).dropna(how='all', axis=0)
     df = df.loc[:, ~df.columns.str.contains('^Unnamed', case=False, na=False)]
     
-    def limpiar_columna_numerica(serie):
-        if serie.dtype == object:
-            serie = serie.astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False).str.strip()
-        return pd.to_numeric(serie, errors='coerce').fillna(0.0)
-
-    if 'SKU' not in df.columns and 'sku' not in [str(c).lower() for c in df.columns]:
-        df.insert(0, 'SKU', [f"PROD{i+1:02d}" for i in range(len(df))])
-
-    num_cols = df.shape[1]
-    df.rename(columns={df.columns[1]: 'Producto'}, inplace=True)
-
-    if num_cols > 2:
-        df.rename(columns={df.columns[2]: 'Costo'}, inplace=True)
-        df['Costo'] = limpiar_columna_numerica(df['Costo'])
-    else:
-        df['Costo'] = 0.0
-
-    if num_cols > 3:
-        df.rename(columns={df.columns[3]: 'Precio_Menudeo'}, inplace=True)
-        df['Precio_Menudeo'] = limpiar_columna_numerica(df['Precio_Menudeo'])
-    else:
-        df['Precio_Menudeo'] = df['Costo']
-
-    if num_cols > 4:
-        df.rename(columns={df.columns[4]: 'Precio_Mayoreo_1'}, inplace=True)
-        df['Precio_Mayoreo_1'] = limpiar_columna_numerica(df['Precio_Mayoreo_1'])
-    else:
-        df['Precio_Mayoreo_1'] = df['Precio_Menudeo']
-
-    df['Precio_Mayoreo_2'] = df['Precio_Mayoreo_1']
-
-    if num_cols > 5:
-        df.rename(columns={df.columns[5]: 'Precio_Especial'}, inplace=True)
-        df['Precio_Especial'] = limpiar_columna_numerica(df['Precio_Especial'])
-        df['Precio_Especial'] = df['Precio_Especial'].apply(lambda x: 0.0 if x <= 0 else x)
-    else:
-        df['Precio_Especial'] = 0.0
-
-    df['Stock'] = 100
-    return df
-
+   def limpiar_columna_numerica(serie):
+    # Si por alguna columna duplicada llega un DataFrame, extraemos la primera columna
+    if isinstance(serie, pd.DataFrame):
+        serie = serie.iloc[:, 0]
+    
+    if hasattr(serie, 'dtype') and serie.dtype == object:
+        serie = serie.astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False).str.strip()
+    
+    return pd.to_numeric(serie, errors='coerce').fillna(0.0)
 def registrar_en_historial(df):
     pass
 
