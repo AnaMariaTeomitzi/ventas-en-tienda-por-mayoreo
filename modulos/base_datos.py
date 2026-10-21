@@ -2,29 +2,70 @@ import pandas as pd
 from datetime import datetime
 import os
 import sqlite3
-
 import streamlit as st
 
 def conectar_db():
-    """Conecta a Turso si estamos en la nube, o usa SQLite local si estás en tu PC."""
+    """Conecta a Turso en la nube si hay secrets, o usa SQLite local de respaldo."""
     try:
-        # Intenta leer las credenciales seguras de Streamlit Secrets (en la nube)
         turso_url = st.secrets["TURSO_URL"]
         turso_token = st.secrets["TURSO_AUTH_TOKEN"]
-        
-        # Conexión remota para la nube
         import libsql
         conn = libsql.connect(turso_url, auth_token=turso_token)
         return conn
-    except:
-        # Si estás en tu PC local (donde no hay secrets configurados), usa tu SQLite local de respaldo
+    except Exception:
         conn = sqlite3.connect("textiles_local.db")
         return conn
-# Definición de archivos
+
+def inicializar_tablas():
+    """Crea las tablas necesarias en Turso o SQLite si no existen."""
+    conn = conectar_db()
+    cursor = conn.cursor()
+    
+    # Tabla de Catálogo
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS catalogo_productos (
+            SKU TEXT PRIMARY KEY,
+            Producto TEXT,
+            Costo REAL,
+            Precio_Menudeo REAL,
+            Precio_Mayoreo_1 REAL,
+            Precio_Mayoreo_2 REAL,
+            Precio_Especial REAL,
+            Stock INTEGER
+        );
+    """)
+    
+    # Tabla de Ventas
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS registro_ventas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Fecha TEXT,
+            Sucursal TEXT,
+            Cliente TEXT,
+            SKU TEXT,
+            Producto TEXT,
+            Nivel_Precio TEXT,
+            Precio_Unitario REAL,
+            Costo_Unitario REAL,
+            Cantidad REAL
+        );
+    """)
+    
+    # Tabla de Clientes Recurrentes
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS clientes_recurrentes (
+            Cliente TEXT PRIMARY KEY
+        );
+    """)
+    
+    conn.commit()
+    conn.close()
+
+# Inicializar tablas al cargar el módulo
+inicializar_tablas()
+
+# Definición de archivos de respaldo por si acaso
 CATALOGO_FILE = "catalogo_productos.csv"
-HISTORIAL_COSTOS_FILE = "historial_costos.csv"
-VENTAS_FILE = "registro_ventas.csv"
-COMPRAS_FILE = "registro_compras.csv"
 CLIENTES_RECURRENTES_FILE = "clientes_recurrentes.csv"
 
 def limpiar_y_preparar_catalogo(df):
@@ -73,16 +114,7 @@ def limpiar_y_preparar_catalogo(df):
     return df
 
 def registrar_en_historial(df):
-    ahora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    df_copia = df.copy()
-    df_copia["Fecha_Actualizacion"] = ahora
-    cols_hist = [c for c in ["Fecha_Actualizacion", "SKU", "Producto", "Costo", "Precio_Menudeo", "Precio_Mayoreo_1", "Precio_Mayoreo_2", "Precio_Especial"] if c in df_copia.columns]
-    df_historico_nuevo = df_copia[cols_hist]
-    
-    if os.path.exists(HISTORIAL_COSTOS_FILE):
-        df_historico_nuevo.to_csv(HISTORIAL_COSTOS_FILE, mode='a', header=False, index=False)
-    else:
-        df_historico_nuevo.to_csv(HISTORIAL_COSTOS_FILE, index=False)
+    pass
 
 def cargar_catalogo_defecto():
     datos = {
@@ -98,52 +130,57 @@ def cargar_catalogo_defecto():
     return pd.DataFrame(datos)
 
 def obtener_catalogo():
-    if os.path.exists(CATALOGO_FILE):
-        try:
-            df = pd.read_csv(CATALOGO_FILE)
-            return limpiar_y_preparar_catalogo(df)
-        except:
+    """Obtiene el catálogo directamente desde la base de datos."""
+    conn = conectar_db()
+    try:
+        df = pd.read_sql("SELECT * FROM catalogo_productos", conn)
+        conn.close()
+        if df.empty:
             df = cargar_catalogo_defecto()
-            df.to_csv(CATALOGO_FILE, index=False)
-            return df
-    else:
-        df = cargar_catalogo_defecto()
-        df.to_csv(CATALOGO_FILE, index=False)
+            guardar_catalogo_db(df)
         return df
+    except Exception:
+        conn.close()
+        return cargar_catalogo_defecto()
+
+def guardar_catalogo_db(df):
+    conn = conectar_db()
+    df.to_sql("catalogo_productos", conn, if_exists="replace", index=False)
+    conn.close()
 
 def obtener_clientes_recurrentes_lista():
-    if os.path.exists(CLIENTES_RECURRENTES_FILE):
-        try:
-            df_cr = pd.read_csv(CLIENTES_RECURRENTES_FILE)
-            return [c.strip() for c in df_cr["Cliente"].dropna().unique().tolist() if c.strip()]
-        except:
-            return []
-    return []
+    conn = conectar_db()
+    try:
+        df_cr = pd.read_sql("SELECT Cliente FROM clientes_recurrentes", conn)
+        conn.close()
+        return [c.strip() for c in df_cr["Cliente"].dropna().unique().tolist() if c.strip()]
+    except Exception:
+        conn.close()
+        return []
 
 def guardar_cliente_recurrente(nuevo_cliente):
     cliente_clean = nuevo_cliente.strip()
     if not cliente_clean:
         return False
-    lista_actual = []
-    if os.path.exists(CLIENTES_RECURRENTES_FILE):
-        try:
-            df_cr = pd.read_csv(CLIENTES_RECURRENTES_FILE)
-            lista_actual = df_cr["Cliente"].tolist()
-        except:
-            lista_actual = []
-    if cliente_clean.lower() not in [c.lower() for c in lista_actual]:
-        lista_actual.append(cliente_clean)
-        pd.DataFrame({"Cliente": lista_actual}).to_csv(CLIENTES_RECURRENTES_FILE, index=False)
+    conn = conectar_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT OR IGNORE INTO clientes_recurrentes (Cliente) VALUES (?);", (cliente_clean,))
+        conn.commit()
+        conn.close()
         return True
-    return False
+    except Exception:
+        conn.close()
+        return False
 
 def eliminar_cliente_recurrente(cliente_eliminar):
-    if os.path.exists(CLIENTES_RECURRENTES_FILE):
-        try:
-            df_cr = pd.read_csv(CLIENTES_RECURRENTES_FILE)
-            df_cr = df_cr[df_cr["Cliente"].astype(str).str.strip().str.lower() != cliente_eliminar.strip().lower()]
-            df_cr.to_csv(CLIENTES_RECURRENTES_FILE, index=False)
-            return True
-        except:
-            return False
-    return False
+    conn = conectar_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM clientes_recurrentes WHERE TRIM(LOWER(Cliente)) = TRIM(LOWER(?));", (cliente_eliminar.strip(),))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception:
+        conn.close()
+        return False
