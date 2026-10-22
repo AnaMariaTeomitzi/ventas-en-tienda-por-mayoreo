@@ -5,16 +5,9 @@ import sqlite3
 import streamlit as st
 
 def conectar_db():
-    """Conecta a Turso en la nube si hay secrets, o usa SQLite local de respaldo."""
-    try:
-        turso_url = st.secrets["TURSO_URL"]
-        turso_token = st.secrets["TURSO_AUTH_TOKEN"]
-        import libsql
-        conn = libsql.connect(turso_url, auth_token=turso_token)
-        return conn
-    except Exception:
-        conn = sqlite3.connect("textiles_local.db")
-        return conn
+    """Usa SQLite local temporalmente para verificar el arranque."""
+    conn = sqlite3.connect("textiles_local.db")
+    return conn
 
 def inicializar_tablas():
     """Crea las tablas necesarias en Turso o SQLite si no existen."""
