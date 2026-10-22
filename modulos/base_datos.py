@@ -17,8 +17,8 @@ def conectar_db():
             # Tiempo límite de 3 segundos para evitar que la red congele la app
             client = libsql_client.create_client_sync(url=url_http, auth_token=turso_token, timeout=3)
             return ("turso", client)
-    except Exception:
-        pass
+    except Exception as e:
+        st.warning(f"Aviso: No se pudo conectar a Turso ({e}), usando base de datos local SQLite.")
     
     # Respaldo local ultrarrápido
     conn = sqlite3.connect("textiles_local.db", check_same_thread=False)
@@ -94,8 +94,8 @@ def inicializar_tablas():
                 );
             """)
             conn.commit()
-    except Exception:
-        pass
+    except Exception as e:
+        st.error(f"Error al inicializar tablas: {e}")
 
 # Definición de archivos y variables de respaldo
 CATALOGO_FILE = "catalogo_productos.csv"
@@ -107,6 +107,41 @@ COMPRAS_FILE = "compras.csv"
 def limpiar_y_preparar_catalogo(df):
     df = df.dropna(how='all', axis=1).dropna(how='all', axis=0)
     df = df.loc[:, ~df.columns.str.contains('^Unnamed', case=False, na=False)]
+    
+    # Normalizar nombres de columnas del Excel para evitar KeyErrors
+    renombres = {}
+    for col in df.columns:
+        c_lower = str(col).strip().lower()
+        if c_lower in ['sku', 'código', 'codigo']:
+            renombres[col] = 'SKU'
+        elif c_lower in ['producto', 'nombre', 'articulo', 'artículo']:
+            renombres[col] = 'Producto'
+        elif c_lower in ['costo', 'costo_unitario', 'costo real']:
+            renombres[col] = 'Costo'
+        elif c_lower in ['precio_menudeo', 'menudeo', 'precio menudeo']:
+            renombres[col] = 'Precio_Menudeo'
+        elif c_lower in ['precio_mayoreo_1', 'mayoreo 1', 'precio_mayoreo1']:
+            renombres[col] = 'Precio_Mayoreo_1'
+        elif c_lower in ['precio_mayoreo_2', 'mayoreo 2', 'precio_mayoreo2']:
+            renombres[col] = 'Precio_Mayoreo_2'
+        elif c_lower in ['precio_especial', 'especial', 'precio especial']:
+            renombres[col] = 'Precio_Especial'
+        elif c_lower in ['stock', 'existencia', 'cantidad']:
+            renombres[col] = 'Stock'
+            
+    df = df.rename(columns=renombres)
+    
+    # Asegurar que existan las columnas obligatorias
+    cols_requeridas = ['SKU', 'Producto', 'Costo', 'Precio_Menudeo', 'Precio_Mayoreo_1', 'Precio_Mayoreo_2', 'Precio_Especial', 'Stock']
+    for c in cols_requeridas:
+        if c not in df.columns:
+            if c in ['Costo', 'Precio_Menudeo', 'Precio_Mayoreo_1', 'Precio_Mayoreo_2', 'Precio_Especial']:
+                df[c] = 0.0
+            elif c == 'Stock':
+                df[c] = 0
+            else:
+                df[c] = ""
+                
     return df
 
 def limpiar_columna_numerica(serie):
@@ -150,7 +185,8 @@ def obtener_catalogo():
                 df = cargar_catalogo_defecto()
                 guardar_catalogo_db(df)
             return df
-    except Exception:
+    except Exception as e:
+        st.error(f"Error al obtener catálogo de la BD: {e}")
         return cargar_catalogo_defecto()
 
 def guardar_catalogo_db(df):
@@ -161,12 +197,21 @@ def guardar_catalogo_db(df):
             for _, row in df.iterrows():
                 conn.execute(
                     "INSERT OR REPLACE INTO catalogo_productos (SKU, Producto, Costo, Precio_Menudeo, Precio_Mayoreo_1, Precio_Mayoreo_2, Precio_Especial, Stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
-                    (str(row["SKU"]), str(row["Producto"]), float(row["Costo"]), float(row["Precio_Menudeo"]), float(row["Precio_Mayoreo_1"]), float(row["Precio_Mayoreo_2"]), float(row["Precio_Especial"]), int(row["Stock"]))
+                    (
+                        str(row.get("SKU", "")).strip(), 
+                        str(row.get("Producto", "")).strip(), 
+                        float(row.get("Costo", 0.0)), 
+                        float(row.get("Precio_Menudeo", 0.0)), 
+                        float(row.get("Precio_Mayoreo_1", 0.0)), 
+                        float(row.get("Precio_Mayoreo_2", 0.0)), 
+                        float(row.get("Precio_Especial", 0.0)), 
+                        int(float(row.get("Stock", 0)))
+                    )
                 )
         else:
             df.to_sql("catalogo_productos", conn, if_exists="replace", index=False)
     except Exception as e:
-        st.error(f"Error al guardar catálogo: {e}")
+        st.error(f"Error al guardar catálogo en la base de datos: {e}")
 
 def obtener_clientes_recurrentes_lista():
     tipo, conn = conectar_db()
