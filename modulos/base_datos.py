@@ -9,8 +9,10 @@ def conectar_db():
     try:
         turso_url = st.secrets["TURSO_URL"]
         turso_token = st.secrets["TURSO_AUTH_TOKEN"]
-        import libsql_client as libsql
-        conn = libsql.connect(turso_url, auth_token=turso_token)
+        import libsql
+        # Asegurarnos de usar formato https si viene como libsql://
+        url_corregida = turso_url.replace("libsql://", "https://")
+        conn = libsql.connect(database="textiles", sync_url=url_corregida, auth_token=turso_token)
         st.sidebar.success("Conectado a Turso (Nube) ☁️")
         return conn
     except Exception as e:
