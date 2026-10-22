@@ -64,6 +64,9 @@ def mostrar(df_catalogo, acceso_propietaria):
                     registrar_en_historial(df_catalogo)
                     df_final.to_csv(CATALOGO_FILE, index=False)
                     
+                    # Limpiamos la caché de Streamlit para forzar la lectura del nuevo archivo
+                    st.cache_data.clear()
+                    
                     st.success("¡Precios y catálogo actualizados con éxito!")
                     st.rerun()
                 except Exception as e:
@@ -80,6 +83,10 @@ def mostrar(df_catalogo, acceso_propietaria):
                     df_subido = limpiar_y_preparar_catalogo(df_subido)
                     registrar_en_historial(df_catalogo)
                     df_subido.to_csv(CATALOGO_FILE, index=False)
+                    
+                    # Limpiamos la caché para que la app lea el archivo nuevo inmediatamente
+                    st.cache_data.clear()
+                    
                     st.success("¡Catálogo cargado y actualizado correctamente!")
                     st.rerun()
                 except Exception as e:
@@ -109,6 +116,9 @@ def mostrar(df_catalogo, acceso_propietaria):
                                 df_restaurado = df_respaldo_sel[cols_base].copy()
                                 df_restaurado = limpiar_y_preparar_catalogo(df_restaurado)
                                 df_restaurado.to_csv(CATALOGO_FILE, index=False)
+
+                                # Limpiamos la caché tras restaurar
+                                st.cache_data.clear()
 
                                 st.success(f"¡Catálogo restaurado exitosamente a la versión de {fecha_sel}!")
                                 st.rerun()
