@@ -109,8 +109,8 @@ def limpiar_y_preparar_catalogo(df):
     
     num_cols = df.shape[1]
     
-    # Creamos el DataFrame limpio basándonos estrictamente en las columnas de tu Excel:
-    # 0: Concepto (Producto) | 1: Pr... (Costo) | 2: Venta (Menudeo) | 3: Mayoreo | 4: Super Mayoreo
+    # Mapeo por posición exacta según las columnas de tu Excel:
+    # 0: Producto | 1: Costo | 2: Precio Menudeo | 3: Mayoreo 1 | 4: Super Mayoreo
     df_nuevo = pd.DataFrame()
     df_nuevo['SKU'] = [f"P{i+1:03d}" for i in range(len(df))]
     df_nuevo['Producto'] = df.iloc[:, 0].astype(str).str.strip() if num_cols > 0 else ""
@@ -121,7 +121,6 @@ def limpiar_y_preparar_catalogo(df):
     df_nuevo['Precio_Especial'] = df.iloc[:, 5] if num_cols > 5 else 0.0
     df_nuevo['Stock'] = 100
 
-    # Limpieza rigurosa de valores numéricos
     cols_num = ['Costo', 'Precio_Menudeo', 'Precio_Mayoreo_1', 'Precio_Mayoreo_2', 'Precio_Especial']
     for col in cols_num:
         serie = df_nuevo[col]
@@ -135,7 +134,8 @@ def limpiar_y_preparar_catalogo(df):
 def guardar_catalogo_db(df):
     # --- DIAGNÓSTICO VISUAL ---
     st.write("📋 **Columnas detectadas en bruto:**", list(df.columns))
-    st.write("🔍 **Primeras 3 filas procesadas:**", limpiar_y_preparar_catalogo(df).head(3))
+    df_procesado = limpiar_y_preparar_catalogo(df)
+    st.write("🔍 **Primeras 3 filas procesadas:**", df_procesado.head(3))
     # --------------------------
     
     tipo, conn = conectar_db()
@@ -144,7 +144,7 @@ def guardar_catalogo_db(df):
             st.error("El archivo Excel está vacío o no se pudo leer.")
             return False
             
-        df = limpiar_y_preparar_catalogo(df)
+        df = df_procesado
         
         def to_scalar(val, default=0.0, is_int=False):
             if isinstance(val, pd.Series):
@@ -195,69 +195,7 @@ def guardar_catalogo_db(df):
     except Exception as e:
         st.error(f"Error al guardar catálogo en la base de datos: {e}")
         return False
-    def guardar_catalogo_db(df):
-    # --- LÍNEAS DE DIAGNÓSTICO (Temporal) ---
-    st.write("📋 **Columnas detectadas:**", list(df.columns))
-    st.write("🔍 **Primeras 3 filas:**", df.head(3))
-    # ----------------------------------------
-    tipo, conn = conectar_db()
-    try:
-        if df is None or getattr(df, 'empty', True):
-            st.error("El archivo Excel está vacío o no se pudo leer.")
-            return False
-            
-        df = limpiar_y_preparar_catalogo(df)
-        
-        def to_scalar(val, default=0.0, is_int=False):
-            if isinstance(val, pd.Series):
-                val = val.iloc[0]
-            try:
-                num = pd.to_numeric(val, errors='coerce')
-                if pd.isna(num):
-                    return default
-                return int(num) if is_int else float(num)
-            except Exception:
-                return str(val) if default == "" else default
 
-        sku_col = df["SKU"]
-        if isinstance(sku_col, pd.DataFrame):
-            sku_col = sku_col.iloc[:, 0]
-            
-        sku_limpio = sku_col.astype(str).str.strip()
-        sku_limpio = sku_limpio.apply(lambda x: x[:-2] if x.endswith('.0') else x)
-        df["SKU"] = sku_limpio
-        
-        mask = (df["SKU"] != "") & (df["SKU"].str.lower() != "nan") & (df["SKU"].notna())
-        df = df[mask]
-        
-        if df.empty:
-            st.error("El archivo no contiene productos con un SKU válido para guardar.")
-            return False
-
-        if tipo == "turso":
-            for _, row in df.iterrows():
-                sku = str(to_scalar(row.get("SKU", ""), default="")).strip()
-                producto = str(to_scalar(row.get("Producto", ""), default="")).strip()
-                costo = to_scalar(row.get("Costo", 0.0), default=0.0)
-                p_menudeo = to_scalar(row.get("Precio_Menudeo", 0.0), default=0.0)
-                p_may1 = to_scalar(row.get("Precio_Mayoreo_1", 0.0), default=0.0)
-                p_may2 = to_scalar(row.get("Precio_Mayoreo_2", 0.0), default=0.0)
-                p_esp = to_scalar(row.get("Precio_Especial", 0.0), default=0.0)
-                stock = to_scalar(row.get("Stock", 100), default=100, is_int=True)
-
-                conn.execute(
-                    "INSERT OR REPLACE INTO catalogo_productos (SKU, Producto, Costo, Precio_Menudeo, Precio_Mayoreo_1, Precio_Mayoreo_2, Precio_Especial, Stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
-                    (sku, producto, costo, p_menudeo, p_may1, p_may2, p_esp, stock)
-                )
-        else:
-            df.to_sql("catalogo_productos", conn, if_exists="replace", index=False)
-            
-        # Limpiar la caché de Streamlit para forzar la recarga inmediata de los nuevos precios
-        st.cache_data.clear()
-        return True
-    except Exception as e:
-        st.error(f"Error al guardar catálogo en la base de datos: {e}")
-        return False
 def limpiar_columna_numerica(serie):
     if isinstance(serie, pd.DataFrame):
         serie = serie.iloc[:, 0]
