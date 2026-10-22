@@ -254,8 +254,14 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                 if exito:
                     st.success(f"⭐ ¡Venta registrada y sincronizada con éxito para '{cliente.strip()}'!")
                     
-                    # Llamada automática para imprimir el ticket térmico
-                    imprimir_ticket_html(cliente.strip(), sucursal_activa, st.session_state.carrito, total_general)
+                    # Guardamos el último ticket en la sesión para mostrarlo en pantalla con su botón de impresión
+                    st.session_state.ultimo_ticket = {
+                        "cliente": cliente.strip(),
+                        "sucursal": sucursal_activa,
+                        "fecha": ahora.strftime("%Y-%m-%d %H:%M:%S"),
+                        "items": items_finales,
+                        "total": total_general
+                    }
                 else:
                     st.warning("Venta procesada, pero hubo un detalle al sincronizar con la base de datos principal.")
 
@@ -264,63 +270,70 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
     else:
         st.info("El carrito está vacío. Agrega productos arriba.")
 
-
-def imprimir_ticket_html(cliente, sucursal, items_carrito, total_general):
-    filas_html = ""
-    for item in items_carrito:
-        subtotal = item['Cantidad'] * item.get('Precio_Unitario', item.get('Precio_Menudeo', 0))
-        filas_html += f"""
-        <tr>
-            <td>{item['Producto']}</td>
-            <td style="text-align:center;">{int(item['Cantidad'])}</td>
-            <td style="text-align:right;">${subtotal:,.2f}</td>
-        </tr>
-        """
-
-    ticket_html = f"""
-    <html>
-    <head>
-        <style>
-            body {{
-                font-family: 'Courier New', monospace;
-                width: 280px;
-                margin: 0;
-                padding: 5px;
-                font-size: 12px;
-                color: #000;
-            }}
-            .center {{ text-align: center; }}
-            .bold {{ font-weight: bold; }}
-            table {{ width: 100%; border-collapse: collapse; margin-top: 5px; }}
-            th, td {{ padding: 2px; text-align: left; font-size: 11px; }}
-            .divider {{ border-top: 1px dashed #000; margin: 8px 0; }}
-        </style>
-    </head>
-    <body>
-        <div class="center bold" style="font-size: 14px;">TEXTIL ANIT MARI</div>
-        <div class="center">Sucursal: {sucursal}</div>
-        <div class="center">{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</div>
-        <div class="divider"></div>
-        <div>Cliente: {cliente}</div>
-        <div class="divider"></div>
-        <table>
+    # --- VISUALIZADOR Y BOTÓN DE IMPRESIÓN DEL ÚLTIMO TICKET ---
+    if "ultimo_ticket" in st.session_state and st.session_state.ultimo_ticket:
+        t = st.session_state.ultimo_ticket
+        st.markdown("---")
+        st.markdown("### 🖨️ Ticket de Venta Generado")
+        
+        filas_html = ""
+        for itm in t["items"]:
+            filas_html += f"""
             <tr>
-                <th>Prod</th>
-                <th style="text-align:center;">Cant</th>
-                <th style="text-align:right;">Total</th>
+                <td>{itm['Producto']}</td>
+                <td style="text-align:center;">{int(itm['Cantidad'])}</td>
+                <td style="text-align:right;">${itm['Total_Venta']:,.2f}</td>
             </tr>
-            {filas_html}
-        </table>
-        <div class="divider"></div>
-        <div class="bold" style="text-align:right; font-size: 14px;">TOTAL: ${total_general:,.2f}</div>
-        <div class="divider"></div>
-        <div class="center" style="font-size: 10px;">¡Gracias por su compra!</div>
-        <script>
-            window.onload = function() {{
-                window.print();
-            }};
-        </script>
-    </body>
-    </html>
-    """
-    components.html(ticket_html, height=0)
+            """
+
+        ticket_html = f"""
+        <html>
+        <head>
+            <style>
+                body {{
+                    font-family: 'Courier New', monospace;
+                    width: 260px;
+                    margin: 0 auto;
+                    padding: 10px;
+                    font-size: 12px;
+                    color: #000;
+                    background: #fff;
+                }}
+                .center {{ text-align: center; }}
+                .bold {{ font-weight: bold; }}
+                table {{ width: 100%; border-collapse: collapse; margin-top: 5px; }}
+                th, td {{ padding: 2px; text-align: left; font-size: 11px; border-bottom: 1px dotted #ccc; }}
+                .divider {{ border-top: 1px dashed #000; margin: 8px 0; }}
+            </style>
+        </head>
+        <body>
+            <div class="center bold" style="font-size: 14px;">TEXTIL ANIT MARI</div>
+            <div class="center">Sucursal: {t['sucursal']}</div>
+            <div class="center">{t['fecha']}</div>
+            <div class="divider"></div>
+            <div>Cliente: {t['cliente']}</div>
+            <div class="divider"></div>
+            <table>
+                <tr>
+                    <th>Prod</th>
+                    <th style="text-align:center;">Cant</th>
+                    <th style="text-align:right;">Total</th>
+                </tr>
+                {filas_html}
+            </table>
+            <div class="divider"></div>
+            <div class="bold" style="text-align:right; font-size: 13px;">TOTAL: ${t['total']:,.2f}</div>
+            <div class="divider"></div>
+            <div class="center" style="font-size: 10px;">¡Gracias por su compra!</div>
+            <br>
+            <div class="center">
+                <button onclick="window.print()" style="padding: 8px 15px; font-weight: bold; background: #2e7d32; color: white; border: none; border-radius: 4px; cursor: pointer;">🖨️ Imprimir Ticket</button>
+            </div>
+        </body>
+        </html>
+        """
+        components.html(ticket_html, height=340)
+        
+        if st.button("✖️ Cerrar Vista de Ticket"):
+            del st.session_state.ultimo_ticket
+            st.rerun()
