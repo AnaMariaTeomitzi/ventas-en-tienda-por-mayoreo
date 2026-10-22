@@ -168,4 +168,4 @@ def obtener_historial_ventas():
         return df
     except Exception:
         conn.close()
-        return pd.DataFrame()rn pd.DataFrame()
+        return pd.DataFrame()
