@@ -103,13 +103,16 @@ VENTAS_FILE = "registro_ventas.csv"
 COMPRAS_FILE = "compras.csv"
 
 def limpiar_y_preparar_catalogo(df):
-    df = df.dropna(how='all', axis=1).dropna(how='all', axis=0)
-    df = df.loc[:, ~df.columns.str.contains('^Unnamed', case=False, na=False)]
+    if isinstance(df, pd.DataFrame):
+        # Eliminar columnas duplicadas si el Excel tiene encabezados repetidos
+        df = df.loc[:, ~df.columns.duplicated()]
+        df = df.dropna(how='all', axis=1).dropna(how='all', axis=0)
+        cols_validas = [c for c in df.columns if not str(c).startswith('Unnamed')]
+        df = df[cols_validas]
     
-    # Mapeo directo basado en las posiciones y nombres reales de tu Excel
     columnas_actuales = list(df.columns)
     
-    # Renombramos según el orden exacto de tus columnas
+    # Mapeo directo basado en las posiciones y nombres reales de tu Excel
     renombres = {}
     for i, col in enumerate(columnas_actuales):
         c_lower = str(col).strip().lower()
@@ -137,20 +140,26 @@ def limpiar_y_preparar_catalogo(df):
             if c in ['Costo', 'Precio_Menudeo', 'Precio_Mayoreo_1', 'Precio_Mayoreo_2', 'Precio_Especial']:
                 df[c] = 0.0
             elif c == 'Stock':
-                df[c] = 100 # Stock predeterminado para que no vaya en cero
+                df[c] = 100 
             else:
                 df[c] = ""
 
-    # Limpieza de valores numéricos (quitando $, comas y convirtiendo a float)
+    # Limpieza de valores numéricos garantizando columnas individuales
     cols_num = ['Costo', 'Precio_Menudeo', 'Precio_Mayoreo_1', 'Precio_Mayoreo_2', 'Precio_Especial']
     for col in cols_num:
         if col in df.columns:
-            serie_limpia = df[col].astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False).str.strip()
+            serie = df[col]
+            if isinstance(serie, pd.DataFrame):
+                serie = serie.iloc[:, 0]
+            serie_limpia = serie.astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False).str.strip()
             df[col] = pd.to_numeric(serie_limpia, errors='coerce').fillna(0.0)
 
     if 'Stock' in df.columns:
-        serie_stock = df['Stock'].astype(str).str.replace(',', '', regex=False).str.strip()
-        df['Stock'] = pd.to_numeric(serie_stock, errors='coerce').fillna(100).astype(int)
+        serie_stock = df['Stock']
+        if isinstance(serie_stock, pd.DataFrame):
+            serie_stock = serie_stock.iloc[:, 0]
+        serie_stock_limpia = serie_stock.astype(str).str.replace(',', '', regex=False).str.strip()
+        df['Stock'] = pd.to_numeric(serie_stock_limpia, errors='coerce').fillna(100).astype(int)
                 
     df = df[cols_requeridas]
     return df
