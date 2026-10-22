@@ -159,7 +159,7 @@ def limpiar_y_preparar_catalogo(df):
     df = df[cols_requeridas]
     return df
 
-def guardar_catalogo_db(df):
+
     def guardar_catalogo_db(df):
     # --- LÍNEAS DE DIAGNÓSTICO (Temporal) ---
     st.write("📋 **Columnas detectadas:**", list(df.columns))
