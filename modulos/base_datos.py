@@ -72,13 +72,13 @@ CLIENTES_RECURRENTES_FILE = "clientes_recurrentes.csv"
 HISTORIAL_COSTOS_FILE = "historial_costos.csv"
 VENTAS_FILE = "registro_ventas.csv"
 COMPRAS_FILE = "compras.csv"
+
 def limpiar_y_preparar_catalogo(df):
     df = df.dropna(how='all', axis=1).dropna(how='all', axis=0)
     df = df.loc[:, ~df.columns.str.contains('^Unnamed', case=False, na=False)]
     return df
 
 def limpiar_columna_numerica(serie):
-    # Si por alguna columna duplicada llega un DataFrame, extraemos la primera columna
     if isinstance(serie, pd.DataFrame):
         serie = serie.iloc[:, 0]
     
