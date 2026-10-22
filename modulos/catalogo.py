@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
-from .base_datos import CATALOGO_FILE, HISTORIAL_COSTOS_FILE, limpiar_y_preparar_catalogo, registrar_en_historial
+from .base_datos import CATALOGO_FILE, HISTORIAL_COSTOS_FILE, limpiar_y_preparar_catalogo, registrar_en_historial, guardar_catalogo_db
 
 def mostrar(df_catalogo, acceso_propietaria):
     st.title("📦 Gestión de Productos, Edición de Precios e Historial")
@@ -36,7 +36,6 @@ def mostrar(df_catalogo, acceso_propietaria):
             st.markdown("### ✏️ Edición Rápida de Precios y Productos")
             st.info("Puedes hacer doble clic en cualquier celda para cambiar precios o nombres. Al terminar, haz clic en **'💾 Guardar Cambios en Catálogo'**.")
             
-            # Mostramos el editor usando el DataFrame filtrado para la vista
             df_editado = st.data_editor(
                 df_filtrado, 
                 use_container_width=True, 
@@ -46,28 +45,26 @@ def mostrar(df_catalogo, acceso_propietaria):
 
             if st.button("💾 Guardar Cambios en Catálogo", use_container_width=True):
                 try:
-                    # Obtenemos la tabla completa directamente desde el estado del editor en la sesión
                     df_final = df_catalogo.copy()
                     df_cambios = st.session_state["editor_catalogo"]
                     
                     if busqueda and "SKU" in df_final.columns:
-                        # Actualizamos fila por fila basándonos en el SKU editado
                         for _, row in df_cambios.iterrows():
                             sku_val = row["SKU"]
                             df_final.loc[df_final["SKU"] == sku_val] = row
                     else:
-                        # Si no hay búsqueda activa, el editor contiene todo el catálogo
                         df_final = df_cambios.copy()
 
-                    # Limpiamos, respaldamos y guardamos de forma persistente
                     df_final = limpiar_y_preparar_catalogo(df_final)
                     registrar_en_historial(df_catalogo)
-                    df_final.to_csv(CATALOGO_FILE, index=False)
                     
-                    # Limpiamos la caché de Streamlit para forzar la lectura del nuevo archivo
+                    # Guardamos directamente en la Base de Datos (Turso/SQLite)
+                    guardar_catalogo_db(df_final)
+                    
+                    # Limpiamos la caché para forzar la lectura fresca de la BD
                     st.cache_data.clear()
                     
-                    st.success("¡Precios y catálogo actualizados con éxito!")
+                    st.success("¡Precios y catálogo actualizados en la base de datos con éxito!")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error al guardar los cambios: {e}")
@@ -82,12 +79,12 @@ def mostrar(df_catalogo, acceso_propietaria):
                     df_subido = pd.read_excel(archivo_subido)
                     df_subido = limpiar_y_preparar_catalogo(df_subido)
                     registrar_en_historial(df_catalogo)
-                    df_subido.to_csv(CATALOGO_FILE, index=False)
                     
-                    # Limpiamos la caché para que la app lea el archivo nuevo inmediatamente
+                    # Guardamos el Excel directamente en la Base de Datos
+                    guardar_catalogo_db(df_subido)
+                    
                     st.cache_data.clear()
-                    
-                    st.success("¡Catálogo cargado y actualizado correctamente!")
+                    st.success("¡Catálogo cargado y actualizado en la base de datos correctamente!")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error al procesar el archivo Excel: {e}")
@@ -115,11 +112,11 @@ def mostrar(df_catalogo, acceso_propietaria):
                                 cols_base = [c for c in df_respaldo_sel.columns if c != "Fecha_Actualizacion"]
                                 df_restaurado = df_respaldo_sel[cols_base].copy()
                                 df_restaurado = limpiar_y_preparar_catalogo(df_restaurado)
-                                df_restaurado.to_csv(CATALOGO_FILE, index=False)
+                                
+                                # Guardamos la versión restaurada en la Base de Datos
+                                guardar_catalogo_db(df_restaurado)
 
-                                # Limpiamos la caché tras restaurar
                                 st.cache_data.clear()
-
                                 st.success(f"¡Catálogo restaurado exitosamente a la versión de {fecha_sel}!")
                                 st.rerun()
                         else:
