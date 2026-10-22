@@ -5,19 +5,17 @@ import streamlit as st
 import libsql_client
 
 def conectar_db():
-    """Crea un cliente síncrono de Turso usando libsql-client."""
+    """Crea un cliente síncrono de Turso usando libsql-client de forma segura."""
     try:
         turso_url = st.secrets["TURSO_URL"]
         turso_token = st.secrets["TURSO_AUTH_TOKEN"]
-        # libsql-client requiere formato https://
         url_http = turso_url.replace("libsql://", "https://")
         client = libsql_client.create_client_sync(url=url_http, auth_token=turso_token)
-        st.sidebar.success("Conectado a Turso (Nube) ☁️")
         return client
     except Exception as e:
-        st.sidebar.warning(f"Error de conexión Turso: {e}")
+        st.sidebar.warning(f"Modo local por red: {e}")
         return None
-
+        
 def inicializar_tablas():
     """Crea las tablas necesarias en Turso si no existen."""
     client = conectar_db()
@@ -63,7 +61,7 @@ def inicializar_tablas():
         client.close()
 
 # Inicializar tablas al cargar el módulo
-inicializar_tablas()
+#inicializar_tablas()
 
 # Definición de archivos y variables de respaldo
 CATALOGO_FILE = "catalogo_productos.csv"
