@@ -156,7 +156,6 @@ def limpiar_y_preparar_catalogo(df):
 def guardar_catalogo_db(input_data):
     tipo, conn = conectar_db()
     try:
-        # Lector universal que acepta tanto DataFrames como archivos Excel o CSV subidos
         df = leer_archivo_catalogo(input_data)
         
         if df is None or getattr(df, 'empty', True):
@@ -191,7 +190,6 @@ def guardar_catalogo_db(input_data):
             st.error("El archivo no contiene productos con un SKU válido para guardar.")
             return False
 
-        # Guardar en Base de Datos (Turso o SQLite)
         if tipo == "turso":
             for _, row in df.iterrows():
                 sku = str(to_scalar(row.get("SKU", ""), default="")).strip()
@@ -210,15 +208,18 @@ def guardar_catalogo_db(input_data):
         else:
             df.to_sql("catalogo_productos", conn, if_exists="replace", index=False)
             
-        # Respaldo automático en CSV local
+        # Guardar respaldo CSV local
         df.to_csv(CATALOGO_FILE, index=False)
             
         st.cache_data.clear()
+        st.success("¡Catálogo actualizado con éxito!")
+        
+        # Forzar recarga inmediata de la interfaz de Streamlit
+        st.rerun()
         return True
     except Exception as e:
         st.error(f"Error al guardar catálogo en la base de datos: {e}")
         return False
-
 def limpiar_columna_numerica(serie):
     if isinstance(serie, pd.DataFrame):
         serie = serie.iloc[:, 0]
