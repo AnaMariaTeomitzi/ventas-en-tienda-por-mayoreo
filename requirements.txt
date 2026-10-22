@@ -2,3 +2,4 @@ streamlit
 pandas
 libsql-client
 openpyxl
+libsql-client
