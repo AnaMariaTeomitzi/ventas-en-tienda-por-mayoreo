@@ -4,37 +4,28 @@ import os
 import sqlite3
 import streamlit as st
 
-# Intentamos importar libsql_client de forma segura
-try:
-    import libsql_client
-    HAS_LIBSQL = True
-except ImportError:
-    HAS_LIBSQL = False
-
 @st.cache_resource
 def conectar_db():
-    """Conecta a Turso si es posible; si no, usa SQLite local para evitar bloqueos."""
-    if not HAS_LIBSQL:
-        st.sidebar.warning("Usando SQLite (Local) 💻")
-        return ("sqlite", sqlite3.connect("textiles_local.db", check_same_thread=False))
-    
+    """Conecta a Turso de forma segura; si falla o la red tarda, usa SQLite local."""
     try:
+        import libsql_client
         turso_url = st.secrets.get("TURSO_URL", "")
         turso_token = st.secrets.get("TURSO_AUTH_TOKEN", "")
         
-        if not turso_url or not turso_token:
-            raise Exception("Faltan secretos de Turso")
-            
-        url_http = turso_url.replace("libsql://", "https://")
-        client = libsql_client.create_client_sync(url=url_http, auth_token=turso_token, timeout=5)
-        st.sidebar.success("Conectado a Turso (Nube) ☁️")
-        return ("turso", client)
-    except Exception as e:
-        st.sidebar.warning(f"Usando SQLite (Local) 💻")
-        return ("sqlite", sqlite3.connect("textiles_local.db", check_same_thread=False))
+        if turso_url and turso_token:
+            url_http = turso_url.replace("libsql://", "https://")
+            # Tiempo límite de 3 segundos para evitar que la red congele la app
+            client = libsql_client.create_client_sync(url=url_http, auth_token=turso_token, timeout=3)
+            return ("turso", client)
+    except Exception:
+        pass
+    
+    # Respaldo local ultrarrápido
+    conn = sqlite3.connect("textiles_local.db", check_same_thread=False)
+    return ("sqlite", conn)
 
 def inicializar_tablas():
-    """Crea las tablas necesarias según el tipo de conexión activa."""
+    """Crea las tablas necesarias de manera perezosa sin bloquear el arranque."""
     tipo, conn = conectar_db()
     try:
         if tipo == "turso":
@@ -106,9 +97,6 @@ def inicializar_tablas():
     except Exception:
         pass
 
-# Inicializar tablas de forma segura
-inicializar_tablas()
-
 # Definición de archivos y variables de respaldo
 CATALOGO_FILE = "catalogo_productos.csv"
 CLIENTES_RECURRENTES_FILE = "clientes_recurrentes.csv"
@@ -145,6 +133,7 @@ def cargar_catalogo_defecto():
     return pd.DataFrame(datos)
 
 def obtener_catalogo():
+    inicializar_tablas()
     tipo, conn = conectar_db()
     try:
         if tipo == "turso":
