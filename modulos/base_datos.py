@@ -168,7 +168,6 @@ def guardar_catalogo_db(df):
             
         df = limpiar_y_preparar_catalogo(df)
         
-        # Función auxiliar para asegurar que cada celda sea un valor escalar único
         def to_scalar(val, default=0.0, is_int=False):
             if isinstance(val, pd.Series):
                 val = val.iloc[0]
@@ -213,6 +212,8 @@ def guardar_catalogo_db(df):
         else:
             df.to_sql("catalogo_productos", conn, if_exists="replace", index=False)
             
+        # Limpiar la caché de Streamlit para forzar la recarga inmediata de los nuevos precios
+        st.cache_data.clear()
         return True
     except Exception as e:
         st.error(f"Error al guardar catálogo en la base de datos: {e}")
