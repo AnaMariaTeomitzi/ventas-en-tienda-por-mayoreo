@@ -108,30 +108,36 @@ def limpiar_y_preparar_catalogo(df):
     df = df.dropna(how='all', axis=1).dropna(how='all', axis=0)
     df = df.loc[:, ~df.columns.str.contains('^Unnamed', case=False, na=False)]
     
-    # Normalizar nombres de columnas del Excel para ser ultra flexibles
+    # Normalizar nombres de columnas del Excel de forma flexible
     renombres = {}
     for col in df.columns:
         c_lower = str(col).strip().lower()
-        if c_lower in ['sku', 'código', 'codigo', 'id']:
+        if c_lower in ['sku', 'código', 'codigo', 'id', 'clave']:
             renombres[col] = 'SKU'
         elif c_lower in ['producto', 'nombre', 'articulo', 'artículo', 'descripción', 'descripcion']:
             renombres[col] = 'Producto'
         elif c_lower in ['costo', 'costo_unitario', 'costo real', 'precio compra']:
             renombres[col] = 'Costo'
-        elif c_lower in ['precio_menudeo', 'menudeo', 'precio menudeo', 'precio 1']:
+        elif c_lower in ['precio_menudeo', 'menudeo', 'precio menudeo', 'precio 1', 'precio']:
             renombres[col] = 'Precio_Menudeo'
         elif c_lower in ['precio_mayoreo_1', 'mayoreo 1', 'precio_mayoreo1', 'precio 2']:
             renombres[col] = 'Precio_Mayoreo_1'
         elif c_lower in ['precio_mayoreo_2', 'mayoreo 2', 'precio_mayoreo2', 'precio 3']:
             renombres[col] = 'Precio_Mayoreo_2'
-        elif c_lower in ['precio_especial', 'especial', 'precio especial', 'precio_especial ']:
+        elif c_lower in ['precio_especial', 'especial', 'precio especial']:
             renombres[col] = 'Precio_Especial'
         elif c_lower in ['stock', 'existencia', 'cantidad', 'inventario']:
             renombres[col] = 'Stock'
             
     df = df.rename(columns=renombres)
     
-    # Asegurar que existan las columnas obligatorias
+    # Si no detectó la columna SKU por nombre, tomamos la primera columna por defecto
+    if 'SKU' not in df.columns and len(df.columns) > 0:
+        df = df.rename(columns={df.columns[0]: 'SKU'})
+    if 'Producto' not in df.columns and len(df.columns) > 1:
+        df = df.rename(columns={df.columns[1]: 'Producto'})
+
+    # Asegurar que existan todas las columnas obligatorias
     cols_requeridas = ['SKU', 'Producto', 'Costo', 'Precio_Menudeo', 'Precio_Mayoreo_1', 'Precio_Mayoreo_2', 'Precio_Especial', 'Stock']
     for c in cols_requeridas:
         if c not in df.columns:
@@ -143,7 +149,6 @@ def limpiar_y_preparar_catalogo(df):
                 df[c] = ""
                 
     return df
-    
 def limpiar_columna_numerica(serie):
     if isinstance(serie, pd.DataFrame):
         serie = serie.iloc[:, 0]
@@ -198,30 +203,39 @@ def guardar_catalogo_db(df):
             
         df = limpiar_y_preparar_catalogo(df)
         
-        # Filtrar filas que no tengan un SKU válido antes de tocar la base de datos
-        df = df[df["SKU"].astype(str).str.strip() != ""]
+        # Limpieza robusta del SKU para evitar errores con flotantes (ej. 1.0 -> 1) o nulos
+        df["SKU"] = df["SKU"].astype(str).str.strip()
+        df["SKU"] = df["SKU"].apply(lambda x: x[:-2] if x.endswith('.0') else x)
+        
+        df = df[
+            (df["SKU"] != "") & 
+            (df["SKU"].str.lower() != "nan") & 
+            (df["SKU"].notna())
+        ]
+        
         if df.empty:
-            st.error("El archivo no contiene productos con un SKU válido para guardar.")
+            st.error("El archivo no contiene productos con un SKU válido para guardar. Verifica las columnas de tu Excel.")
             return False
 
         if tipo == "turso":
-            # Usamos INSERT OR REPLACE fila por fila de forma segura
             for _, row in df.iterrows():
+                # Limpiar y convertir valores numéricos de forma segura
+                sku = str(row.get("SKU", "")).strip()
+                producto = str(row.get("Producto", "")).strip()
+                costo = float(pd.to_numeric(row.get("Costo", 0.0), errors='coerce') or 0.0)
+                p_menudeo = float(pd.to_numeric(row.get("Precio_Menudeo", 0.0), errors='coerce') or 0.0)
+                p_may1 = float(pd.to_numeric(row.get("Precio_Mayoreo_1", 0.0), errors='coerce') or 0.0)
+                p_may2 = float(pd.to_numeric(row.get("Precio_Mayoreo_2", 0.0), errors='coerce') or 0.0)
+                p_esp = float(pd.to_numeric(row.get("Precio_Especial", 0.0), errors='coerce') or 0.0)
+                stock = int(pd.to_numeric(row.get("Stock", 0), errors='coerce') or 0)
+
                 conn.execute(
                     "INSERT OR REPLACE INTO catalogo_productos (SKU, Producto, Costo, Precio_Menudeo, Precio_Mayoreo_1, Precio_Mayoreo_2, Precio_Especial, Stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
-                    (
-                        str(row.get("SKU", "")).strip(), 
-                        str(row.get("Producto", "")).strip(), 
-                        float(row.get("Costo", 0.0)), 
-                        float(row.get("Precio_Menudeo", 0.0)), 
-                        float(row.get("Precio_Mayoreo_1", 0.0)), 
-                        float(row.get("Precio_Mayoreo_2", 0.0)), 
-                        float(row.get("Precio_Especial", 0.0)), 
-                        int(float(row.get("Stock", 0)))
-                    )
+                    (sku, producto, costo, p_menudeo, p_may1, p_may2, p_esp, stock)
                 )
         else:
             df.to_sql("catalogo_productos", conn, if_exists="replace", index=False)
+            
         return True
     except Exception as e:
         st.error(f"Error al guardar catálogo en la base de datos: {e}")
