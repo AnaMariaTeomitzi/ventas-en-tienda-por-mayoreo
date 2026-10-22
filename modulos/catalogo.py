@@ -44,12 +44,9 @@ def mostrar(df_catalogo, acceso_propietaria):
                 key="editor_catalogo"
             )
 
-            if st.button("💾 Guardar Cambios en Catálogo", use_container_width=True):
+         if st.button("💾 Guardar Cambios en Catálogo", use_container_width=True):
                 try:
-                    # Creamos una copia del catálogo original para actualizar solo los registros modificados o reemplazarlos por completo
                     df_final = df_catalogo.copy()
-                    
-                    # Actualizamos fila por fila basándonos en el SKU (o índice si prefieres reemplazo total cuando no hay filtros)
                     if busqueda and "SKU" in df_final.columns:
                         for _, row in df_editado.iterrows():
                             sku_val = row["SKU"]
@@ -57,15 +54,11 @@ def mostrar(df_catalogo, acceso_propietaria):
                     else:
                         df_final = df_editado.copy()
 
-                    # Limpiamos y preparamos antes de guardar
                     df_final = limpiar_y_preparar_catalogo(df_final)
-                    
-                    # Guardamos respaldo en el historial y luego el archivo CSV
                     registrar_en_historial(df_catalogo)
                     df_final.to_csv(CATALOGO_FILE, index=False)
                     
-                    st.success("¡Precios y catálogo actualizados con éxito! Se guardó un respaldo del estado anterior.")
-                    
+                    st.success("¡Precios y catálogo actualizados con éxito!")
                 except Exception as e:
                     st.error(f"Error al guardar los cambios: {e}")
 
