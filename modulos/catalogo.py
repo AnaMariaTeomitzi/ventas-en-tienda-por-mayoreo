@@ -70,7 +70,7 @@ def mostrar(df_catalogo, acceso_propietaria):
                 except Exception as e:
                     st.error(f"Error al guardar los cambios: {e}")
 
-       with tab_subir:
+      with tab_subir:
             st.markdown("### 📤 Subir tu Catálogo (Excel o CSV)")
             st.info("Sube tu archivo .xlsx o .csv con tus productos, costos y precios.")
             
@@ -79,18 +79,30 @@ def mostrar(df_catalogo, acceso_propietaria):
                 try:
                     registrar_en_historial(df_catalogo)
                     
-                    # 1. Leemos el archivo usando nuestra función universal
-                    from .base_datos import leer_archivo_catalogo
+                    from .base_datos import leer_archivo_catalogo, conectar_db, CATALOGO_FILE
                     df_crudo = leer_archivo_catalogo(archivo_subido)
                     
                     if df_crudo is not None and not df_crudo.empty:
-                        # 2. Limpiamos y preparamos el DataFrame estrictamente
                         df_limpio = limpiar_y_preparar_catalogo(df_crudo)
                         
-                        # 3. Guardamos el DataFrame limpio directamente en la BD y CSV
-                        if guardar_catalogo_db(df_limpio):
-                            st.success("¡Catálogo cargado y actualizado correctamente en el sistema!")
-                            st.rerun()
+                        # Guardado directo asegurando escritura en BD y CSV local
+                        tipo, conn = conectar_db()
+                        if tipo == "turso":
+                            # Limpiamos tabla anterior y reinsertamos todo limpio
+                            conn.execute("DELETE FROM catalogo_productos;")
+                            for _, row in df_limpio.iterrows():
+                                conn.execute(
+                                    "INSERT OR REPLACE INTO catalogo_productos (SKU, Producto, Costo, Precio_Menudeo, Precio_Mayoreo_1, Precio_Mayoreo_2, Precio_Especial, Stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
+                                    (str(row.get("SKU", "")), str(row.get("Producto", "")), float(row.get("Costo", 0)), float(row.get("Precio_Menudeo", 0)), float(row.get("Precio_Mayoreo_1", 0)), float(row.get("Precio_Mayoreo_2", 0)), float(row.get("Precio_Especial", 0)), int(row.get("Stock", 100)))
+                                )
+                        else:
+                            df_limpio.to_sql("catalogo_productos", conn, if_exists="replace", index=False)
+                            
+                        df_limpio.to_csv(CATALOGO_FILE, index=False)
+                        st.cache_data.clear()
+                        
+                        st.success("¡Catálogo cargado y actualizado correctamente en el sistema!")
+                        st.rerun()
                     else:
                         st.error("El archivo está vacío o no se pudo leer.")
                 except Exception as e:
