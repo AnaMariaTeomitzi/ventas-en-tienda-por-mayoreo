@@ -102,6 +102,26 @@ HISTORIAL_COSTOS_FILE = "historial_costos.csv"
 VENTAS_FILE = "registro_ventas.csv"
 COMPRAS_FILE = "compras.csv"
 
+def leer_archivo_catalogo(archivo_subido):
+    """Lee un archivo subido detectando automáticamente si es Excel o CSV."""
+    if archivo_subido is None:
+        return None
+    if isinstance(archivo_subido, pd.DataFrame):
+        return archivo_subido
+    try:
+        nombre = getattr(archivo_subido, "name", "").lower()
+        if nombre.endswith('.csv'):
+            try:
+                return pd.read_csv(archivo_subido, encoding='utf-8')
+            except Exception:
+                archivo_subido.seek(0)
+                return pd.read_csv(archivo_subido, encoding='latin1')
+        else:
+            return pd.read_excel(archivo_subido)
+    except Exception as e:
+        st.error(f"Error al leer el archivo: {e}")
+        return None
+
 def limpiar_y_preparar_catalogo(df):
     if isinstance(df, pd.DataFrame):
         df = df.dropna(how='all', axis=1).dropna(how='all', axis=0)
@@ -133,20 +153,17 @@ def limpiar_y_preparar_catalogo(df):
 
     return df_nuevo
 
-def guardar_catalogo_db(df):
-    # --- DIAGNÓSTICO VISUAL ---
-    st.write("📋 **Columnas detectadas en bruto:**", list(df.columns))
-    df_procesado = limpiar_y_preparar_catalogo(df)
-    st.write("🔍 **Primeras 3 filas procesadas:**", df_procesado.head(3))
-    # --------------------------
-    
+def guardar_catalogo_db(input_data):
     tipo, conn = conectar_db()
     try:
+        # Lector universal que acepta tanto DataFrames como archivos Excel o CSV subidos
+        df = leer_archivo_catalogo(input_data)
+        
         if df is None or getattr(df, 'empty', True):
-            st.error("El archivo Excel está vacío o no se pudo leer.")
+            st.error("El archivo está vacío o no se pudo leer.")
             return False
             
-        df = df_procesado
+        df = limpiar_y_preparar_catalogo(df)
         
         def to_scalar(val, default=0.0, is_int=False):
             if isinstance(val, pd.Series):
@@ -174,6 +191,7 @@ def guardar_catalogo_db(df):
             st.error("El archivo no contiene productos con un SKU válido para guardar.")
             return False
 
+        # Guardar en Base de Datos (Turso o SQLite)
         if tipo == "turso":
             for _, row in df.iterrows():
                 sku = str(to_scalar(row.get("SKU", ""), default="")).strip()
@@ -191,6 +209,9 @@ def guardar_catalogo_db(df):
                 )
         else:
             df.to_sql("catalogo_productos", conn, if_exists="replace", index=False)
+            
+        # Respaldo automático en CSV local
+        df.to_csv(CATALOGO_FILE, index=False)
             
         st.cache_data.clear()
         return True
