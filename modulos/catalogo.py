@@ -10,6 +10,11 @@ def mostrar(df_catalogo, acceso_propietaria):
     if df_catalogo is not None and not df_catalogo.empty:
         df_catalogo = df_catalogo.loc[:, ~df_catalogo.columns.str.contains('^Unnamed', na=False)]
 
+    # Normalizar nombres de columnas a minúsculas temporalmente para búsqueda segura si es necesario
+    cols_lower = {c.lower(): c for c in df_catalogo.columns}
+    sku_col = cols_lower.get("sku", "SKU")
+    prod_col = cols_lower.get("producto", cols_lower.get("nombre", "Producto"))
+
     # --- BUSCADOR DINÁMICO ---
     st.markdown("---")
     busqueda = st.text_input("🔍 Buscar producto por nombre o SKU:", "").strip().lower()
@@ -17,10 +22,10 @@ def mostrar(df_catalogo, acceso_propietaria):
     df_filtrado = df_catalogo.copy()
     if busqueda:
         condicion = False
-        if "SKU" in df_filtrado.columns:
-            condicion = condicion | df_filtrado["SKU"].astype(str).str.lower().str.contains(busqueda, na=False)
-        if "Producto" in df_filtrado.columns:
-            condicion = condicion | df_filtrado["Producto"].astype(str).str.lower().str.contains(busqueda, na=False)
+        if sku_col in df_filtrado.columns:
+            condicion = condicion | df_filtrado[sku_col].astype(str).str.lower().str.contains(busqueda, na=False)
+        if prod_col in df_filtrado.columns:
+            condicion = condicion | df_filtrado[prod_col].astype(str).str.lower().str.contains(busqueda, na=False)
         
         df_filtrado = df_filtrado[condicion]
     # -------------------------
@@ -48,22 +53,20 @@ def mostrar(df_catalogo, acceso_propietaria):
                     df_final = df_catalogo.copy()
                     df_cambios = st.session_state["editor_catalogo"]
                     
-                    if busqueda and "SKU" in df_final.columns:
+                    if busqueda and sku_col in df_final.columns:
                         for _, row in df_cambios.iterrows():
-                            sku_val = row["SKU"]
-                            df_final.loc[df_final["SKU"] == sku_val] = row
+                            sku_val = row[sku_col]
+                            df_final.loc[df_final[sku_col] == sku_val] = row
                     else:
                         df_final = df_cambios.copy()
 
                     df_final = limpiar_y_preparar_catalogo(df_final)
                     registrar_en_historial(df_catalogo)
                     
-                    # Guardamos directamente en la Base de Datos (Turso/SQLite)
+                    # Guardamos directamente en la Base de Datos
                     guardar_catalogo_db(df_final)
                     
-                    # Limpiamos la caché para forzar la lectura fresca de la BD
                     st.cache_data.clear()
-                    
                     st.success("¡Precios y catálogo actualizados en la base de datos con éxito!")
                     st.rerun()
                 except Exception as e:
@@ -113,7 +116,6 @@ def mostrar(df_catalogo, acceso_propietaria):
                                 df_restaurado = df_respaldo_sel[cols_base].copy()
                                 df_restaurado = limpiar_y_preparar_catalogo(df_restaurado)
                                 
-                                # Guardamos la versión restaurada en la Base de Datos
                                 guardar_catalogo_db(df_restaurado)
 
                                 st.cache_data.clear()
