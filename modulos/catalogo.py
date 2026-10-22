@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
-from .base_datos import CATALOGO_FILE, HISTORIAL_COSTOS_FILE, limpiar_y_preparar_catalogo, registrar_en_historial, guardar_catalogo_db
+from .base_datos import CATALOGO_FILE, HISTORIAL_COSTOS_FILE, limpiar_y_preparar_catalogo, registrar_en_historial, guardar_catalogo_db, leer_archivo_catalogo, conectar_db
 
 def mostrar(df_catalogo, acceso_propietaria):
     st.title("📦 Gestión de Productos, Edición de Precios e Historial")
@@ -70,7 +70,7 @@ def mostrar(df_catalogo, acceso_propietaria):
                 except Exception as e:
                     st.error(f"Error al guardar los cambios: {e}")
 
-      with tab_subir:
+        with tab_subir:
             st.markdown("### 📤 Subir tu Catálogo (Excel o CSV)")
             st.info("Sube tu archivo .xlsx o .csv con tus productos, costos y precios.")
             
@@ -79,16 +79,13 @@ def mostrar(df_catalogo, acceso_propietaria):
                 try:
                     registrar_en_historial(df_catalogo)
                     
-                    from .base_datos import leer_archivo_catalogo, conectar_db, CATALOGO_FILE
                     df_crudo = leer_archivo_catalogo(archivo_subido)
                     
                     if df_crudo is not None and not df_crudo.empty:
                         df_limpio = limpiar_y_preparar_catalogo(df_crudo)
                         
-                        # Guardado directo asegurando escritura en BD y CSV local
                         tipo, conn = conectar_db()
                         if tipo == "turso":
-                            # Limpiamos tabla anterior y reinsertamos todo limpio
                             conn.execute("DELETE FROM catalogo_productos;")
                             for _, row in df_limpio.iterrows():
                                 conn.execute(
