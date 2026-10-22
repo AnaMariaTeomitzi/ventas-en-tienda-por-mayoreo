@@ -14,13 +14,11 @@ def conectar_db():
         
         if turso_url and turso_token:
             url_http = turso_url.replace("libsql://", "https://")
-            # Conexión limpia sin el argumento timeout que causaba el conflicto
             client = libsql_client.create_client_sync(url=url_http, auth_token=turso_token)
             return ("turso", client)
     except Exception as e:
         st.warning(f"Aviso: No se pudo conectar a Turso ({e}), usando base de datos local SQLite.")
     
-    # Respaldo local ultrarrápido
     conn = sqlite3.connect("textiles_local.db", check_same_thread=False)
     return ("sqlite", conn)
 
@@ -131,13 +129,23 @@ def limpiar_y_preparar_catalogo(df):
             
     df = df.rename(columns=renombres)
     
-    # Si no detectó la columna SKU por nombre, tomamos la primera columna por defecto
-    if 'SKU' not in df.columns and len(df.columns) > 0:
-        df = df.rename(columns={df.columns[0]: 'SKU'})
-    if 'Producto' not in df.columns and len(df.columns) > 1:
-        df = df.rename(columns={df.columns[1]: 'Producto'})
+    # Si el Excel NO tiene columna SKU pero tiene Producto (o la primera columna es el nombre)
+    if 'SKU' not in df.columns:
+        if 'Producto' in df.columns:
+            df.insert(0, 'SKU', [f"P{i+1:03d}" for i in range(len(df))])
+        else:
+            cols_actuales = list(df.columns)
+            if len(cols_actuales) >= 1:
+                df = df.rename(columns={cols_actuales[0]: 'Producto'})
+                df.insert(0, 'SKU', [f"P{i+1:03d}" for i in range(len(df))])
 
-    # Asegurar que existan todas las columnas obligatorias
+    # Si hay SKU pero no Producto, nombramos la siguiente columna como Producto
+    if 'SKU' in df.columns and 'Producto' not in df.columns:
+        cols_restantes = [c for c in df.columns if c != 'SKU']
+        if cols_restantes:
+            df = df.rename(columns={cols_restantes[0]: 'Producto'})
+
+    # Asegurar que existan todas las columnas obligatorias en orden correcto
     cols_requeridas = ['SKU', 'Producto', 'Costo', 'Precio_Menudeo', 'Precio_Mayoreo_1', 'Precio_Mayoreo_2', 'Precio_Especial', 'Stock']
     for c in cols_requeridas:
         if c not in df.columns:
@@ -148,7 +156,9 @@ def limpiar_y_preparar_catalogo(df):
             else:
                 df[c] = ""
                 
+    df = df[cols_requeridas]
     return df
+    
 def limpiar_columna_numerica(serie):
     if isinstance(serie, pd.DataFrame):
         serie = serie.iloc[:, 0]
@@ -203,7 +213,6 @@ def guardar_catalogo_db(df):
             
         df = limpiar_y_preparar_catalogo(df)
         
-        # Limpieza robusta del SKU para evitar errores con flotantes (ej. 1.0 -> 1) o nulos
         df["SKU"] = df["SKU"].astype(str).str.strip()
         df["SKU"] = df["SKU"].apply(lambda x: x[:-2] if x.endswith('.0') else x)
         
@@ -214,12 +223,11 @@ def guardar_catalogo_db(df):
         ]
         
         if df.empty:
-            st.error("El archivo no contiene productos con un SKU válido para guardar. Verifica las columnas de tu Excel.")
+            st.error("El archivo no contiene productos con un SKU válido para guardar.")
             return False
 
         if tipo == "turso":
             for _, row in df.iterrows():
-                # Limpiar y convertir valores numéricos de forma segura
                 sku = str(row.get("SKU", "")).strip()
                 producto = str(row.get("Producto", "")).strip()
                 costo = float(pd.to_numeric(row.get("Costo", 0.0), errors='coerce') or 0.0)
@@ -240,6 +248,7 @@ def guardar_catalogo_db(df):
     except Exception as e:
         st.error(f"Error al guardar catálogo en la base de datos: {e}")
         return False
+
 def obtener_clientes_recurrentes_lista():
     tipo, conn = conectar_db()
     try:
