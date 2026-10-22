@@ -12,7 +12,7 @@ def conectar_db():
         turso_url = st.secrets.get("TURSO_URL", "")
         turso_token = st.secrets.get("TURSO_AUTH_TOKEN", "")
         
-       if turso_url and turso_token:
+        if turso_url and turso_token:
             url_http = turso_url.replace("libsql://", "https://")
             # Conexión limpia sin el argumento timeout que causaba el conflicto
             client = libsql_client.create_client_sync(url=url_http, auth_token=turso_token)
