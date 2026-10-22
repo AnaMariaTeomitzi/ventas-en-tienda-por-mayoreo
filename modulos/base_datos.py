@@ -1,57 +1,113 @@
 import pandas as pd
 from datetime import datetime
 import os
+import sqlite3
 import streamlit as st
-import libsql_client
+
+# Intentamos importar libsql_client de forma segura
+try:
+    import libsql_client
+    HAS_LIBSQL = True
+except ImportError:
+    HAS_LIBSQL = False
 
 @st.cache_resource
 def conectar_db():
-    """Crea y almacena en caché el cliente síncrono de Turso."""
+    """Conecta a Turso si es posible; si no, usa SQLite local para evitar bloqueos."""
+    if not HAS_LIBSQL:
+        st.sidebar.warning("Usando SQLite (Local) 💻")
+        return ("sqlite", sqlite3.connect("textiles_local.db", check_same_thread=False))
+    
     try:
-        turso_url = st.secrets["TURSO_URL"]
-        turso_token = st.secrets["TURSO_AUTH_TOKEN"]
+        turso_url = st.secrets.get("TURSO_URL", "")
+        turso_token = st.secrets.get("TURSO_AUTH_TOKEN", "")
+        
+        if not turso_url or not turso_token:
+            raise Exception("Faltan secretos de Turso")
+            
         url_http = turso_url.replace("libsql://", "https://")
-        client = libsql_client.create_client_sync(url=url_http, auth_token=turso_token)
-        return client
+        client = libsql_client.create_client_sync(url=url_http, auth_token=turso_token, timeout=5)
+        st.sidebar.success("Conectado a Turso (Nube) ☁️")
+        return ("turso", client)
     except Exception as e:
-        return None
+        st.sidebar.warning(f"Usando SQLite (Local) 💻")
+        return ("sqlite", sqlite3.connect("textiles_local.db", check_same_thread=False))
 
-def inicializar_tablas_si_es_necesario(client):
-    """Crea las tablas en Turso de forma segura si no existen."""
+def inicializar_tablas():
+    """Crea las tablas necesarias según el tipo de conexión activa."""
+    tipo, conn = conectar_db()
     try:
-        client.execute("""
-            CREATE TABLE IF NOT EXISTS catalogo_productos (
-                SKU TEXT PRIMARY KEY,
-                Producto TEXT,
-                Costo REAL,
-                Precio_Menudeo REAL,
-                Precio_Mayoreo_1 REAL,
-                Precio_Mayoreo_2 REAL,
-                Precio_Especial REAL,
-                Stock INTEGER
-            );
-        """)
-        client.execute("""
-            CREATE TABLE IF NOT EXISTS registro_ventas (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                Fecha TEXT,
-                Sucursal TEXT,
-                Cliente TEXT,
-                SKU TEXT,
-                Producto TEXT,
-                Nivel_Precio TEXT,
-                Precio_Unitario REAL,
-                Costo_Unitario REAL,
-                Cantidad REAL
-            );
-        """)
-        client.execute("""
-            CREATE TABLE IF NOT EXISTS clientes_recurrentes (
-                Cliente TEXT PRIMARY KEY
-            );
-        """)
+        if tipo == "turso":
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS catalogo_productos (
+                    SKU TEXT PRIMARY KEY,
+                    Producto TEXT,
+                    Costo REAL,
+                    Precio_Menudeo REAL,
+                    Precio_Mayoreo_1 REAL,
+                    Precio_Mayoreo_2 REAL,
+                    Precio_Especial REAL,
+                    Stock INTEGER
+                );
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS registro_ventas (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Fecha TEXT,
+                    Sucursal TEXT,
+                    Cliente TEXT,
+                    SKU TEXT,
+                    Producto TEXT,
+                    Nivel_Precio TEXT,
+                    Precio_Unitario REAL,
+                    Costo_Unitario REAL,
+                    Cantidad REAL
+                );
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS clientes_recurrentes (
+                    Cliente TEXT PRIMARY KEY
+                );
+            """)
+        else:
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS catalogo_productos (
+                    SKU TEXT PRIMARY KEY,
+                    Producto TEXT,
+                    Costo REAL,
+                    Precio_Menudeo REAL,
+                    Precio_Mayoreo_1 REAL,
+                    Precio_Mayoreo_2 REAL,
+                    Precio_Especial REAL,
+                    Stock INTEGER
+                );
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS registro_ventas (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Fecha TEXT,
+                    Sucursal TEXT,
+                    Cliente TEXT,
+                    SKU TEXT,
+                    Producto TEXT,
+                    Nivel_Precio TEXT,
+                    Precio_Unitario REAL,
+                    Costo_Unitario REAL,
+                    Cantidad REAL
+                );
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS clientes_recurrentes (
+                    Cliente TEXT PRIMARY KEY
+                );
+            """)
+            conn.commit()
     except Exception:
         pass
+
+# Inicializar tablas de forma segura
+inicializar_tablas()
 
 # Definición de archivos y variables de respaldo
 CATALOGO_FILE = "catalogo_productos.csv"
@@ -89,45 +145,49 @@ def cargar_catalogo_defecto():
     return pd.DataFrame(datos)
 
 def obtener_catalogo():
-    """Obtiene el catálogo directamente desde Turso."""
-    client = conectar_db()
-    if not client:
-        return cargar_catalogo_defecto()
+    tipo, conn = conectar_db()
     try:
-        inicializar_tablas_si_es_necesario(client)
-        rs = client.execute("SELECT * FROM catalogo_productos;")
-        rows = rs.rows
-        if not rows:
-            df = cargar_catalogo_defecto()
-            guardar_catalogo_db(df)
+        if tipo == "turso":
+            rs = conn.execute("SELECT * FROM catalogo_productos;")
+            rows = rs.rows
+            if not rows:
+                df = cargar_catalogo_defecto()
+                guardar_catalogo_db(df)
+                return df
+            return pd.DataFrame(rows, columns=rs.columns)
+        else:
+            df = pd.read_sql("SELECT * FROM catalogo_productos", conn)
+            if df.empty:
+                df = cargar_catalogo_defecto()
+                guardar_catalogo_db(df)
             return df
-        return pd.DataFrame(rows, columns=rs.columns)
     except Exception:
         return cargar_catalogo_defecto()
 
 def guardar_catalogo_db(df):
-    client = conectar_db()
-    if not client:
-        return
+    tipo, conn = conectar_db()
     try:
-        inicializar_tablas_si_es_necesario(client)
-        client.execute("DELETE FROM catalogo_productos;")
-        for _, row in df.iterrows():
-            client.execute(
-                "INSERT OR REPLACE INTO catalogo_productos (SKU, Producto, Costo, Precio_Menudeo, Precio_Mayoreo_1, Precio_Mayoreo_2, Precio_Especial, Stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
-                (str(row["SKU"]), str(row["Producto"]), float(row["Costo"]), float(row["Precio_Menudeo"]), float(row["Precio_Mayoreo_1"]), float(row["Precio_Mayoreo_2"]), float(row["Precio_Especial"]), int(row["Stock"]))
-            )
+        if tipo == "turso":
+            conn.execute("DELETE FROM catalogo_productos;")
+            for _, row in df.iterrows():
+                conn.execute(
+                    "INSERT OR REPLACE INTO catalogo_productos (SKU, Producto, Costo, Precio_Menudeo, Precio_Mayoreo_1, Precio_Mayoreo_2, Precio_Especial, Stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
+                    (str(row["SKU"]), str(row["Producto"]), float(row["Costo"]), float(row["Precio_Menudeo"]), float(row["Precio_Mayoreo_1"]), float(row["Precio_Mayoreo_2"]), float(row["Precio_Especial"]), int(row["Stock"]))
+                )
+        else:
+            df.to_sql("catalogo_productos", conn, if_exists="replace", index=False)
     except Exception as e:
         st.error(f"Error al guardar catálogo: {e}")
 
 def obtener_clientes_recurrentes_lista():
-    client = conectar_db()
-    if not client:
-        return []
+    tipo, conn = conectar_db()
     try:
-        inicializar_tablas_si_es_necesario(client)
-        rs = client.execute("SELECT Cliente FROM clientes_recurrentes;")
-        return [str(row[0]).strip() for row in rs.rows if row[0] and str(row[0]).strip()]
+        if tipo == "turso":
+            rs = conn.execute("SELECT Cliente FROM clientes_recurrentes;")
+            return [str(row[0]).strip() for row in rs.rows if row[0] and str(row[0]).strip()]
+        else:
+            df_cr = pd.read_sql("SELECT Cliente FROM clientes_recurrentes", conn)
+            return [c.strip() for c in df_cr["Cliente"].dropna().unique().tolist() if c.strip()]
     except Exception:
         return []
 
@@ -135,65 +195,67 @@ def guardar_cliente_recurrente(nuevo_cliente):
     cliente_clean = nuevo_cliente.strip()
     if not cliente_clean:
         return False
-    client = conectar_db()
-    if not client:
-        return False
+    tipo, conn = conectar_db()
     try:
-        inicializar_tablas_si_es_necesario(client)
-        client.execute("INSERT OR IGNORE INTO clientes_recurrentes (Cliente) VALUES (?);", (cliente_clean,))
+        if tipo == "turso":
+            conn.execute("INSERT OR IGNORE INTO clientes_recurrentes (Cliente) VALUES (?);", (cliente_clean,))
+        else:
+            cursor = conn.cursor()
+            cursor.execute("INSERT OR IGNORE INTO clientes_recurrentes (Cliente) VALUES (?);", (cliente_clean,))
+            conn.commit()
         return True
     except Exception:
         return False
 
 def eliminar_cliente_recurrente(cliente_eliminar):
-    client = conectar_db()
-    if not client:
-        return False
+    tipo, conn = conectar_db()
     try:
-        inicializar_tablas_si_es_necesario(client)
-        client.execute("DELETE FROM clientes_recurrentes WHERE TRIM(LOWER(Cliente)) = TRIM(LOWER(?));", (cliente_eliminar.strip(),))
+        if tipo == "turso":
+            conn.execute("DELETE FROM clientes_recurrentes WHERE TRIM(LOWER(Cliente)) = TRIM(LOWER(?));", (cliente_eliminar.strip(),))
+        else:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM clientes_recurrentes WHERE TRIM(LOWER(Cliente)) = TRIM(LOWER(?));", (cliente_eliminar.strip(),))
+            conn.commit()
         return True
     except Exception:
         return False
 
 def guardar_venta_db(df_ventas):
-    """Guarda los registros de venta en Turso."""
-    client = conectar_db()
-    if not client:
-        return False
+    tipo, conn = conectar_db()
     try:
-        inicializar_tablas_si_es_necesario(client)
-        for _, row in df_ventas.iterrows():
-            client.execute(
-                "INSERT INTO registro_ventas (Fecha, Sucursal, Cliente, SKU, Producto, Nivel_Precio, Precio_Unitario, Costo_Unitario, Cantidad) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                (
-                    str(row.get("Fecha", "")),
-                    str(row.get("Sucursal", "")),
-                    str(row.get("Cliente", "")),
-                    str(row.get("SKU", "")),
-                    str(row.get("Producto", "")),
-                    str(row.get("Nivel_Precio", "")),
-                    float(row.get("Precio_Unitario", 0.0)),
-                    float(row.get("Costo_Unitario", 0.0)),
-                    float(row.get("Cantidad", 0.0))
+        if tipo == "turso":
+            for _, row in df_ventas.iterrows():
+                conn.execute(
+                    "INSERT INTO registro_ventas (Fecha, Sucursal, Cliente, SKU, Producto, Nivel_Precio, Precio_Unitario, Costo_Unitario, Cantidad) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                    (
+                        str(row.get("Fecha", "")),
+                        str(row.get("Sucursal", "")),
+                        str(row.get("Cliente", "")),
+                        str(row.get("SKU", "")),
+                        str(row.get("Producto", "")),
+                        str(row.get("Nivel_Precio", "")),
+                        float(row.get("Precio_Unitario", 0.0)),
+                        float(row.get("Costo_Unitario", 0.0)),
+                        float(row.get("Cantidad", 0.0))
+                    )
                 )
-            )
+        else:
+            df_ventas.to_sql("registro_ventas", conn, if_exists="append", index=False)
         return True
     except Exception as e:
         st.error(f"Error al guardar venta: {e}")
         return False
 
 def obtener_historial_ventas():
-    """Obtiene todas las ventas desde Turso."""
-    client = conectar_db()
-    if not client:
-        return pd.DataFrame()
+    tipo, conn = conectar_db()
     try:
-        inicializar_tablas_si_es_necesario(client)
-        rs = client.execute("SELECT * FROM registro_ventas;")
-        rows = rs.rows
-        if not rows:
-            return pd.DataFrame()
-        return pd.DataFrame(rows, columns=rs.columns)
+        if tipo == "turso":
+            rs = conn.execute("SELECT * FROM registro_ventas;")
+            rows = rs.rows
+            if not rows:
+                return pd.DataFrame()
+            return pd.DataFrame(rows, columns=rs.columns)
+        else:
+            return pd.read_sql("SELECT * FROM registro_ventas", conn)
     except Exception:
         return pd.DataFrame()
