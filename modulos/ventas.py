@@ -253,6 +253,9 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
 
                 if exito:
                     st.success(f"⭐ ¡Venta registrada y sincronizada con éxito para '{cliente.strip()}'!")
+                    
+                    # Llamada automática para imprimir el ticket térmico
+                    imprimir_ticket_html(cliente.strip(), sucursal_activa, st.session_state.carrito, total_general)
                 else:
                     st.warning("Venta procesada, pero hubo un detalle al sincronizar con la base de datos principal.")
 
@@ -262,16 +265,14 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
         st.info("El carrito está vacío. Agrega productos arriba.")
 
 
-
 def imprimir_ticket_html(cliente, sucursal, items_carrito, total_general):
-    # Generar las filas de los productos en HTML estilo ticket térmico
     filas_html = ""
     for item in items_carrito:
-        subtotal = item['Cantidad'] * item['Precio_Unitario']
+        subtotal = item['Cantidad'] * item.get('Precio_Unitario', item.get('Precio_Menudeo', 0))
         filas_html += f"""
         <tr>
-            <td>{item['Producto']} ({item['SKU']})</td>
-            <td style="text-align:center;">{item['Cantidad']}</td>
+            <td>{item['Producto']}</td>
+            <td style="text-align:center;">{int(item['Cantidad'])}</td>
             <td style="text-align:right;">${subtotal:,.2f}</td>
         </tr>
         """
