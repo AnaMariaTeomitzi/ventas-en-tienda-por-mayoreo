@@ -1,16 +1,12 @@
 import streamlit as st
 import pandas as pd
-from modulos import config_impresora
-
-
-
 
 # Importar funciones desde la carpeta modulos
 from modulos.base_datos import obtener_catalogo, CATALOGO_FILE, HISTORIAL_COSTOS_FILE, VENTAS_FILE, COMPRAS_FILE, limpiar_y_preparar_catalogo, registrar_en_historial
 from modulos.usuarios_db import inicializar_usuario_admin_por_defecto, verificar_credenciales
 
-# Importar módulos de secciones
-from modulos import catalogo, ventas, devoluciones, compras, reportes, clientes_historial, clientes_recurrentes, gestion_usuarios
+# Importar módulos de secciones (incluyendo config_impresora)
+from modulos import catalogo, ventas, devoluciones, compras, reportes, clientes_historial, clientes_recurrentes, gestion_usuarios, config_impresora
 
 st.set_page_config(page_title="Sistema de Ventas - Textil", layout="wide")
 
@@ -89,7 +85,8 @@ if acceso_propietaria:
         "📊 Reportes y Deudas",
         "👥 Historial por Cliente",
         "⭐ Gestión Clientes Recurrentes",
-        "👥 Gestión de Usuarios"
+        "👥 Gestión de Usuarios",
+        "⚙️ Configuración Impresora"
     ]
 else:
     # Si es empleado, opera estrictamente en su sucursal asignada
