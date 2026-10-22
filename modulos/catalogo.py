@@ -32,10 +32,11 @@ def mostrar(df_catalogo, acceso_propietaria):
             "⏪ Restaurar Versión Anterior"
         ])
 
-        with tab_editar:
+      with tab_editar:
             st.markdown("### ✏️ Edición Rápida de Precios y Productos")
             st.info("Puedes hacer doble clic en cualquier celda para cambiar precios o nombres. Al terminar, haz clic en **'💾 Guardar Cambios en Catálogo'**.")
             
+            # Usamos el dataframe completo o el filtrado asegurándonos de conservar el catálogo general
             df_editado = st.data_editor(
                 df_filtrado, 
                 use_container_width=True, 
@@ -45,15 +46,28 @@ def mostrar(df_catalogo, acceso_propietaria):
 
             if st.button("💾 Guardar Cambios en Catálogo", use_container_width=True):
                 try:
-                    df_catalogo.update(df_editado)
+                    # Creamos una copia del catálogo original para actualizar solo los registros modificados o reemplazarlos por completo
+                    df_final = df_catalogo.copy()
+                    
+                    # Actualizamos fila por fila basándonos en el SKU (o índice si prefieres reemplazo total cuando no hay filtros)
+                    if busqueda and "SKU" in df_final.columns:
+                        for _, row in df_editado.iterrows():
+                            sku_val = row["SKU"]
+                            df_final.loc[df_final["SKU"] == sku_val] = row
+                    else:
+                        df_final = df_editado.copy()
+
+                    # Limpiamos y preparamos antes de guardar
+                    df_final = limpiar_y_preparar_catalogo(df_final)
+                    
+                    # Guardamos respaldo en el historial y luego el archivo CSV
                     registrar_en_historial(df_catalogo)
-                    df_catalogo.to_csv(CATALOGO_FILE, index=False)
+                    df_final.to_csv(CATALOGO_FILE, index=False)
+                    
                     st.success("¡Precios y catálogo actualizados con éxito! Se guardó un respaldo del estado anterior.")
                     st.rerun()
                 except Exception as e:
-                    df_editado.to_csv(CATALOGO_FILE, index=False)
-                    st.success("¡Precios y catálogo actualizados con éxito!")
-                    st.rerun()
+                    st.error(f"Error al guardar los cambios: {e}")
 
         with tab_subir:
             st.markdown("### 📤 Subir tu Catálogo en Excel")
