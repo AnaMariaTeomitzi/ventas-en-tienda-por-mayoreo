@@ -4,7 +4,7 @@ from datetime import datetime
 import os
 from .base_datos import obtener_clientes_recurrentes_lista, guardar_venta_db, obtener_historial_ventas
 
-def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial,sucursal_activa="Tienda Chela"):
+def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucursal_activa="Tienda Chela"):
     st.title("🛒 Control de Ventas")
 
     lista_recurrentes_nombres = obtener_clientes_recurrentes_lista()
@@ -39,7 +39,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial,sucurs
     if es_cliente_recurrente_preferente:
         st.success(f"⭐ **Cliente Recurrente Confirmado:** '{cliente.strip()}' cuenta con **Precio Mayoreo 1 garantizado** desde 1 pieza.")
 
-total_compras_historico_cliente = 0.0
+    total_compras_historico_cliente = 0.0
     if cliente.strip().lower() != "público general":
         try:
             df_ventas_hist = obtener_historial_ventas()
@@ -229,10 +229,11 @@ total_compras_historico_cliente = 0.0
                         "Ganancia": ganancia,
                         "Fecha_Hora": ahora.strftime("%Y-%m-%d %H:%M:%S"),
                         "Fecha": ahora.strftime("%Y-%m-%d"),
-                        "Cliente": cliente.strip()
+                        "Cliente": cliente.strip(),
+                        "Sucursal": sucursal_activa
                     })
 
-           df_final_venta = pd.DataFrame(items_finales)
+                df_final_venta = pd.DataFrame(items_finales)
                 
                 # Guardar directamente en la tabla de Turso
                 exito = guardar_venta_db(df_final_venta)
@@ -240,7 +241,7 @@ total_compras_historico_cliente = 0.0
                 if exito:
                     st.success(f"¡Venta registrada con éxito en Turso para '{cliente.strip()}'!")
                 else:
-                    st.warning("Venta registrada, but hubo un detalle al sincronizar con Turso.")
+                    st.warning("Venta registrada, pero hubo un detalle al sincronizar con Turso.")
 
                 st.session_state.carrito = []
                 st.rerun()
