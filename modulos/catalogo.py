@@ -70,19 +70,29 @@ def mostrar(df_catalogo, acceso_propietaria):
                 except Exception as e:
                     st.error(f"Error al guardar los cambios: {e}")
 
-        with tab_subir:
+       with tab_subir:
             st.markdown("### 📤 Subir tu Catálogo (Excel o CSV)")
             st.info("Sube tu archivo .xlsx o .csv con tus productos, costos y precios.")
             
-            archivo_subido = st.file_uploader("Selecciona tu archivo", type=["xlsx", "xls", "csv"])
+            archivo_subido = st.file_uploader("Selecciona tu archivo", type=["xlsx", "xls", "csv"], key="uploader_excel")
             if archivo_subido is not None:
                 try:
                     registrar_en_historial(df_catalogo)
                     
-                    # Usamos la función global que detecta el formato y actualiza todo de golpe
-                    if guardar_catalogo_db(archivo_subido):
-                        st.success("¡Catálogo cargado y actualizado correctamente en el sistema!")
-                        st.rerun()
+                    # 1. Leemos el archivo usando nuestra función universal
+                    from .base_datos import leer_archivo_catalogo
+                    df_crudo = leer_archivo_catalogo(archivo_subido)
+                    
+                    if df_crudo is not None and not df_crudo.empty:
+                        # 2. Limpiamos y preparamos el DataFrame estrictamente
+                        df_limpio = limpiar_y_preparar_catalogo(df_crudo)
+                        
+                        # 3. Guardamos el DataFrame limpio directamente en la BD y CSV
+                        if guardar_catalogo_db(df_limpio):
+                            st.success("¡Catálogo cargado y actualizado correctamente en el sistema!")
+                            st.rerun()
+                    else:
+                        st.error("El archivo está vacío o no se pudo leer.")
                 except Exception as e:
                     st.error(f"Error al procesar el archivo: {e}")
 
