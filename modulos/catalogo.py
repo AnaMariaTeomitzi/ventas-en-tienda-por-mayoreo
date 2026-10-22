@@ -65,7 +65,7 @@ def mostrar(df_catalogo, acceso_propietaria):
                     df_final.to_csv(CATALOGO_FILE, index=False)
                     
                     st.success("¡Precios y catálogo actualizados con éxito! Se guardó un respaldo del estado anterior.")
-                    st.rerun()
+                    
                 except Exception as e:
                     st.error(f"Error al guardar los cambios: {e}")
 
