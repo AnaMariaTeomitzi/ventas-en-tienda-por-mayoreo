@@ -32,7 +32,7 @@ def mostrar(df_catalogo, acceso_propietaria):
             "⏪ Restaurar Versión Anterior"
         ])
 
-     with tab_editar:
+        with tab_editar:
             st.markdown("### ✏️ Edición Rápida de Precios y Productos")
             st.info("Puedes hacer doble clic en cualquier celda para cambiar precios o nombres. Al terminar, haz clic en **'💾 Guardar Cambios en Catálogo'**.")
             
@@ -47,7 +47,6 @@ def mostrar(df_catalogo, acceso_propietaria):
             if st.button("💾 Guardar Cambios en Catálogo", use_container_width=True):
                 try:
                     # Obtenemos la tabla completa directamente desde el estado del editor en la sesión
-                    # Si hubo búsqueda, actualizamos los registros modificados en el catálogo general.
                     df_final = df_catalogo.copy()
                     df_cambios = st.session_state["editor_catalogo"]
                     
