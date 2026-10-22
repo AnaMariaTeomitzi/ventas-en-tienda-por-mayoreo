@@ -12,10 +12,10 @@ def conectar_db():
         turso_url = st.secrets.get("TURSO_URL", "")
         turso_token = st.secrets.get("TURSO_AUTH_TOKEN", "")
         
-        if turso_url and turso_token:
+       if turso_url and turso_token:
             url_http = turso_url.replace("libsql://", "https://")
-            # Tiempo límite de 3 segundos para evitar que la red congele la app
-            client = libsql_client.create_client_sync(url=url_http, auth_token=turso_token, timeout=3)
+            # Conexión limpia sin el argumento timeout que causaba el conflicto
+            client = libsql_client.create_client_sync(url=url_http, auth_token=turso_token)
             return ("turso", client)
     except Exception as e:
         st.warning(f"Aviso: No se pudo conectar a Turso ({e}), usando base de datos local SQLite.")
