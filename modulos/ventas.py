@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import os
+import streamlit.components.v1 as components
 from .base_datos import obtener_clientes_recurrentes_lista, guardar_venta_db, obtener_historial_ventas, VENTAS_FILE, conectar_db
 
 def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucursal_activa="Tienda Chela"):
@@ -259,3 +260,66 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                 st.rerun()
     else:
         st.info("El carrito está vacío. Agrega productos arriba.")
+
+
+
+def imprimir_ticket_html(cliente, sucursal, items_carrito, total_general):
+    # Generar las filas de los productos en HTML estilo ticket térmico
+    filas_html = ""
+    for item in items_carrito:
+        subtotal = item['Cantidad'] * item['Precio_Unitario']
+        filas_html += f"""
+        <tr>
+            <td>{item['Producto']} ({item['SKU']})</td>
+            <td style="text-align:center;">{item['Cantidad']}</td>
+            <td style="text-align:right;">${subtotal:,.2f}</td>
+        </tr>
+        """
+
+    ticket_html = f"""
+    <html>
+    <head>
+        <style>
+            body {{
+                font-family: 'Courier New', monospace;
+                width: 280px;
+                margin: 0;
+                padding: 5px;
+                font-size: 12px;
+                color: #000;
+            }}
+            .center {{ text-align: center; }}
+            .bold {{ font-weight: bold; }}
+            table {{ width: 100%; border-collapse: collapse; margin-top: 5px; }}
+            th, td {{ padding: 2px; text-align: left; font-size: 11px; }}
+            .divider {{ border-top: 1px dashed #000; margin: 8px 0; }}
+        </style>
+    </head>
+    <body>
+        <div class="center bold" style="font-size: 14px;">TEXTIL ANIT MARI</div>
+        <div class="center">Sucursal: {sucursal}</div>
+        <div class="center">{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</div>
+        <div class="divider"></div>
+        <div>Cliente: {cliente}</div>
+        <div class="divider"></div>
+        <table>
+            <tr>
+                <th>Prod</th>
+                <th style="text-align:center;">Cant</th>
+                <th style="text-align:right;">Total</th>
+            </tr>
+            {filas_html}
+        </table>
+        <div class="divider"></div>
+        <div class="bold" style="text-align:right; font-size: 14px;">TOTAL: ${total_general:,.2f}</div>
+        <div class="divider"></div>
+        <div class="center" style="font-size: 10px;">¡Gracias por su compra!</div>
+        <script>
+            window.onload = function() {{
+                window.print();
+            }};
+        </script>
+    </body>
+    </html>
+    """
+    components.html(ticket_html, height=0)
