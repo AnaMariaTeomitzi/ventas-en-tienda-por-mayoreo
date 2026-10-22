@@ -57,10 +57,12 @@ def inicializar_tablas():
 # Inicializar tablas al cargar el módulo
 inicializar_tablas()
 
-# Definición de archivos de respaldo por si acaso
+# Definición de archivos y variables de respaldo
 CATALOGO_FILE = "catalogo_productos.csv"
 CLIENTES_RECURRENTES_FILE = "clientes_recurrentes.csv"
-
+HISTORIAL_COSTOS_FILE = "historial_costos.csv"
+VENTAS_FILE = "registro_ventas.csv"
+COMPRAS_FILE = "compras.csv"
 def limpiar_y_preparar_catalogo(df):
     df = df.dropna(how='all', axis=1).dropna(how='all', axis=0)
     df = df.loc[:, ~df.columns.str.contains('^Unnamed', case=False, na=False)]
