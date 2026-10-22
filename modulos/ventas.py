@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import os
-from .base_datos import obtener_clientes_recurrentes_lista, guardar_venta_db, obtener_historial_ventas
+from .base_datos import obtener_clientes_recurrentes_lista, guardar_venta_db, obtener_historial_ventas, VENTAS_FILE, conectar_db
 
 def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucursal_activa="Tienda Chela"):
     st.title("🛒 Control de Ventas")
@@ -45,7 +45,8 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
             df_ventas_hist = obtener_historial_ventas()
             if not df_ventas_hist.empty and "Cliente" in df_ventas_hist.columns:
                 df_cte_prev = df_ventas_hist[df_ventas_hist["Cliente"].astype(str).str.strip().str.lower() == cliente.strip().lower()]
-                total_compras_historico_cliente = df_cte_prev["Total_Venta"].sum()
+                if "Total_Venta" in df_cte_prev.columns:
+                    total_compras_historico_cliente = pd.to_numeric(df_cte_prev["Total_Venta"], errors='coerce').sum()
         except:
             total_compras_historico_cliente = 0.0
 
@@ -218,30 +219,41 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                     ganancia = t_linea - c_total
 
                     items_finales.append({
-                        "SKU": item["SKU"],
-                        "Producto": item["Producto"],
-                        "Nivel_Precio": nivel_aplicado,
-                        "Precio_Unitario": p_unit,
-                        "Costo_Unitario": item["Costo_Unitario"],
-                        "Cantidad": item["Cantidad"],
-                        "Total_Venta": t_linea,
-                        "Costo_Total": c_total,
-                        "Ganancia": ganancia,
-                        "Fecha_Hora": ahora.strftime("%Y-%m-%d %H:%M:%S"),
                         "Fecha": ahora.strftime("%Y-%m-%d"),
+                        "Sucursal": sucursal_activa,
                         "Cliente": cliente.strip(),
-                        "Sucursal": sucursal_activa
+                        "SKU": str(item["SKU"]),
+                        "Producto": str(item["Producto"]),
+                        "Nivel_Precio": str(nivel_aplicado),
+                        "Precio_Unitario": float(p_unit),
+                        "Costo_Unitario": float(item["Costo_Unitario"]),
+                        "Cantidad": float(item["Cantidad"]),
+                        "Total_Venta": float(t_linea),
+                        "Costo_Total": float(c_total),
+                        "Ganancia": float(ganancia),
+                        "Fecha_Hora": ahora.strftime("%Y-%m-%d %H:%M:%S")
                     })
 
                 df_final_venta = pd.DataFrame(items_finales)
                 
-                # Guardar directamente en la tabla de Turso
+                # Guardar directamente en la tabla de Turso / SQLite
                 exito = guardar_venta_db(df_final_venta)
 
+                # Guardar respaldo automático en CSV local de ventas si existe
+                try:
+                    if os.path.exists(VENTAS_FILE):
+                        df_old_ventas = pd.read_csv(VENTAS_FILE)
+                        df_combined_ventas = pd.concat([df_old_ventas, df_final_venta], ignore_index=True)
+                        df_combined_ventas.to_csv(VENTAS_FILE, index=False)
+                    else:
+                        df_final_venta.to_csv(VENTAS_FILE, index=False)
+                except Exception:
+                    pass
+
                 if exito:
-                    st.success(f"¡Venta registrada con éxito en Turso para '{cliente.strip()}'!")
+                    st.success(f"⭐ ¡Venta registrada y sincronizada con éxito para '{cliente.strip()}'!")
                 else:
-                    st.warning("Venta registrada, pero hubo un detalle al sincronizar con Turso.")
+                    st.warning("Venta procesada, pero hubo un detalle al sincronizar con la base de datos principal.")
 
                 st.session_state.carrito = []
                 st.rerun()
