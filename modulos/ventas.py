@@ -254,7 +254,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                 if exito:
                     st.success(f"⭐ ¡Venta registrada y sincronizada con éxito para '{cliente.strip()}'!")
                     
-                    # Guardamos el último ticket en la sesión para mostrarlo en pantalla con su botón de impresión
+                    # Guardamos el último ticket en la sesión para imprimirlo por Bluetooth
                     st.session_state.ultimo_ticket = {
                         "cliente": cliente.strip(),
                         "sucursal": sucursal_activa,
@@ -270,70 +270,110 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
     else:
         st.info("El carrito está vacío. Agrega productos arriba.")
 
-    # --- VISUALIZADOR Y BOTÓN DE IMPRESIÓN DEL ÚLTIMO TICKET ---
+    # --- VISUALIZADOR Y BOTÓN DE IMPRESIÓN BLUETOOTH MTP-2 ---
     if "ultimo_ticket" in st.session_state and st.session_state.ultimo_ticket:
         t = st.session_state.ultimo_ticket
         st.markdown("---")
-        st.markdown("### 🖨️ Ticket de Venta Generado")
+        st.markdown("### 🖨️ Ticket Generado - Impresión Bluetooth MTP-2")
         
-        filas_html = ""
+        # Generar líneas de productos formateadas para JavaScript ESC/POS
+        lineas_js = ""
         for itm in t["items"]:
-            filas_html += f"""
-            <tr>
-                <td>{itm['Producto']}</td>
-                <td style="text-align:center;">{int(itm['Cantidad'])}</td>
-                <td style="text-align:right;">${itm['Total_Venta']:,.2f}</td>
-            </tr>
-            """
+            prod_clean = str(itm['Producto']).replace('"', '\\"')
+            lineas_js += f'escpos += "{prod_clean}\\n";\n'
+            lineas_js += f'escpos += "  Cant: {int(itm["Cantidad"])} | Total: ${itm["Total_Venta"]:,.2f}\\n";\n'
 
-        ticket_html = f"""
-        <html>
-        <head>
-            <style>
-                body {{
-                    font-family: 'Courier New', monospace;
-                    width: 260px;
-                    margin: 0 auto;
-                    padding: 10px;
-                    font-size: 12px;
-                    color: #000;
-                    background: #fff;
-                }}
-                .center {{ text-align: center; }}
-                .bold {{ font-weight: bold; }}
-                table {{ width: 100%; border-collapse: collapse; margin-top: 5px; }}
-                th, td {{ padding: 2px; text-align: left; font-size: 11px; border-bottom: 1px dotted #ccc; }}
-                .divider {{ border-top: 1px dashed #000; margin: 8px 0; }}
-            </style>
-        </head>
-        <body>
-            <div class="center bold" style="font-size: 14px;">TEXTIL ANIT MARI</div>
-            <div class="center">Sucursal: {t['sucursal']}</div>
-            <div class="center">{t['fecha']}</div>
-            <div class="divider"></div>
-            <div>Cliente: {t['cliente']}</div>
-            <div class="divider"></div>
-            <table>
-                <tr>
-                    <th>Prod</th>
-                    <th style="text-align:center;">Cant</th>
-                    <th style="text-align:right;">Total</th>
-                </tr>
-                {filas_html}
-            </table>
-            <div class="divider"></div>
-            <div class="bold" style="text-align:right; font-size: 13px;">TOTAL: ${t['total']:,.2f}</div>
-            <div class="divider"></div>
-            <div class="center" style="font-size: 10px;">¡Gracias por su compra!</div>
-            <br>
-            <div class="center">
-                <button onclick="window.print()" style="padding: 8px 15px; font-weight: bold; background: #2e7d32; color: white; border: none; border-radius: 4px; cursor: pointer;">🖨️ Imprimir Ticket</button>
+        bluetooth_vta_html = f"""
+        <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px solid #ddd; max-width: 320px; font-family: 'Courier New', monospace;">
+            <div style="text-align: center; font-weight: bold; font-size: 14px;">TEXTIL ANIT MARI</div>
+            <div style="text-align: center; font-size: 11px;">Sucursal: {t['sucursal']}</div>
+            <div style="text-align: center; font-size: 11px;">{t['fecha']}</div>
+            <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
+            <div style="font-size: 11px;">Cliente: {t['cliente']}</div>
+            <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
+            <div style="font-size: 11px;">
+                {'<br>'.join([f"{itm['Producto']}<br>&nbsp;&nbsp;Cant: {int(itm['Cantidad'])} | Total: ${itm['Total_Venta']:,.2f}" for itm in t['items']])}
             </div>
-        </body>
-        </html>
+            <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
+            <div style="text-align: right; font-weight: bold; font-size: 13px;">TOTAL: ${t['total']:,.2f}</div>
+            <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
+            <div style="text-align: center; font-size: 10px;">¡Gracias por su compra!</div>
+            
+            <br>
+            <div style="text-align: center;">
+                <button onclick="imprimirVentaMTP2()" style="padding: 12px 18px; font-weight: bold; background: #2e7d32; color: white; border: none; border-radius: 6px; cursor: pointer; width: 100%;">
+                    🦷 Imprimir Ticket en MTP-2
+                </button>
+                <p id="estado_vta_mtp" style="margin-top: 8px; font-size: 12px; color: #333;"></p>
+            </div>
+        </div>
+
+        <script>
+        async function imprimirVentaMTP2() {{
+            const estado = document.getElementById("estado_vta_mtp");
+            try {{
+                estado.innerText = "Conectando a impresora MTP-2...";
+                
+                const device = await navigator.bluetooth.requestDevice({{
+                    acceptAllDevices: true,
+                    optionalServices: [
+                        '0000ff00-0000-1000-8000-00805f9b34fb', 
+                        '00001101-0000-1000-8000-00805f9b34fb',
+                        '49535343-fe7d-4ae5-8fa9-9fafd205e455'
+                    ]
+                });
+
+                const server = await device.gatt.connect();
+                const services = await server.getPrimaryServices();
+                
+                let writeCharacteristic = null;
+                for (const service of services) {{
+                    const characteristics = await service.getCharacteristics();
+                    for (const char of characteristics) {{
+                        if (char.properties.write || char.properties.writeWithoutResponse) {{
+                            writeCharacteristic = char;
+                            break;
+                        }}
+                    }}
+                    if (writeCharacteristic) break;
+                }}
+
+                if (!writeCharacteristic) {{
+                    throw new Error("No se encontró canal de escritura en la MTP-2.");
+                }}
+
+                estado.innerText = "Enviando ticket a MTP-2...";
+
+                let escpos = "\\x1B\\x40"; // Reset
+                escpos += "\\x1B\\x61\\x01"; // Centrar
+                escpos += "TEXTIL ANIT MARI\\n";
+                escpos += "Sucursal: {t['sucursal']}\\n";
+                escpos += "{t['fecha']}\\n";
+                escpos += "--------------------------------\\n";
+                escpos += "\\x1B\\x61\\x00"; // Izquierda
+                escpos += "Cliente: {t['cliente']}\\n";
+                escpos += "--------------------------------\\n";
+                
+                {lineas_js}
+
+                escpos += "--------------------------------\\n";
+                escpos += "\\x1B\\x61\\x02"; // Derecha
+                escpos += "TOTAL: ${t['total']:,.2f}\\n\\n";
+                escpos += "\\x1B\\x61\\x01"; // Centrar
+                escpos += "¡Gracias por su compra!\\n\\n\\n";
+
+                const encoder = new TextEncoder();
+                await writeCharacteristic.writeValue(encoder.encode(escpos));
+
+                estado.innerText = "✅ ¡Ticket impreso con éxito en MTP-2!";
+            } catch (error) {{
+                estado.innerText = "❌ Error: " + error.message;
+            }}
+        }}
+        </script>
         """
-        components.html(ticket_html, height=340)
+        components.html(bluetooth_vta_html, height=420)
         
-        if st.button("✖️ Cerrar Vista de Ticket"):
+        if st.button("✖️ Cerrar Vista y Nuevo Ticket"):
             del st.session_state.ultimo_ticket
             st.rerun()
