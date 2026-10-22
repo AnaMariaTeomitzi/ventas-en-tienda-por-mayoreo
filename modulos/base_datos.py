@@ -5,17 +5,19 @@ import sqlite3
 import streamlit as st
 
 def conectar_db():
-    """Conecta a Turso en la nube si hay secrets, o usa SQLite local de respaldo."""
+    """Conecta a Turso en la nube y muestra el error exacto si algo falla."""
     try:
+        # Intentamos leer los secretos de Streamlit Cloud
         turso_url = st.secrets["TURSO_URL"]
         turso_token = st.secrets["TURSO_AUTH_TOKEN"]
+        
         import libsql
-        # Asegurarnos de usar formato https si viene como libsql://
-        url_corregida = turso_url.replace("libsql://", "https://")
-        conn = libsql.connect(database="textiles", sync_url=url_corregida, auth_token=turso_token)
+        conn = libsql.connect(turso_url, auth_token=turso_token)
         st.sidebar.success("Conectado a Turso (Nube) ☁️")
         return conn
     except Exception as e:
+        # Esto nos mostrará en la pantalla exactamente qué falló (KeyError, ImportError, etc.)
+        st.error(f"❌ Detalle del error de conexión: {e}")
         st.sidebar.warning("Usando SQLite (Local) 💻")
         conn = sqlite3.connect("textiles_local.db")
         return conn
