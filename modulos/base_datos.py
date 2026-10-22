@@ -104,13 +104,25 @@ COMPRAS_FILE = "compras.csv"
 
 def limpiar_y_preparar_catalogo(df):
     if isinstance(df, pd.DataFrame):
+        # Eliminar columnas de índice fantasma o 'Unnamed' si existen
+        cols_a_borrar = [c for c in df.columns if 'unnamed' in str(c).lower() or str(c).isdigit()]
+        if cols_a_borrar:
+            df = df.drop(columns=cols_a_borrar)
+            
         df = df.dropna(how='all', axis=1).dropna(how='all', axis=0)
-        df = df.loc[:, ~df.columns.str.contains('^Unnamed', case=False, na=False)]
-    
+        df = df.reset_index(drop=True)
+        
+        # Si la primera columna sigue siendo puramente numérica (ej. 0, 1, 2...), la descartamos
+        if len(df.columns) > 0 and pd.api.types.is_numeric_dtype(df.iloc[:, 0]) and not df.iloc[:, 0].dtype == 'float64':
+            # Verificamos si parece un índice secuencial
+            primera_col = df.iloc[:, 0].dropna()
+            if len(primera_col) > 0 and (primera_col.values == range(len(primera_col))).all():
+                df = df.iloc[:, 1:]
+
     num_cols = df.shape[1]
     
-    # Mapeo por posición exacta según las columnas de tu Excel:
-    # 0: Producto | 1: Costo | 2: Precio Menudeo | 3: Mayoreo 1 | 4: Super Mayoreo
+    # Mapeo exacto por posición de columna limpia:
+    # 0: Concepto (Producto) | 1: Costo | 2: Precio Menudeo | 3: Mayoreo 1 | 4: Super Mayoreo
     df_nuevo = pd.DataFrame()
     df_nuevo['SKU'] = [f"P{i+1:03d}" for i in range(len(df))]
     df_nuevo['Producto'] = df.iloc[:, 0].astype(str).str.strip() if num_cols > 0 else ""
@@ -121,6 +133,7 @@ def limpiar_y_preparar_catalogo(df):
     df_nuevo['Precio_Especial'] = df.iloc[:, 5] if num_cols > 5 else 0.0
     df_nuevo['Stock'] = 100
 
+    # Limpieza rigurosa de valores numéricos
     cols_num = ['Costo', 'Precio_Menudeo', 'Precio_Mayoreo_1', 'Precio_Mayoreo_2', 'Precio_Especial']
     for col in cols_num:
         serie = df_nuevo[col]
