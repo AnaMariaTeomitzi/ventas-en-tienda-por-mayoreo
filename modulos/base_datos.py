@@ -160,6 +160,11 @@ def limpiar_y_preparar_catalogo(df):
     return df
 
 def guardar_catalogo_db(df):
+    def guardar_catalogo_db(df):
+    # --- LÍNEAS DE DIAGNÓSTICO (Temporal) ---
+    st.write("📋 **Columnas detectadas:**", list(df.columns))
+    st.write("🔍 **Primeras 3 filas:**", df.head(3))
+    # ----------------------------------------
     tipo, conn = conectar_db()
     try:
         if df is None or getattr(df, 'empty', True):
