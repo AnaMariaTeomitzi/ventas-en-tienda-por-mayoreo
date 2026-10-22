@@ -33,7 +33,7 @@ def mostrar(df_catalogo, acceso_propietaria):
     if acceso_propietaria:
         tab_editar, tab_subir, tab_restaurar = st.tabs([
             "✏️ Editar Precios Directamente", 
-            "📤 Cargar Catálogo en Excel", 
+            "📤 Cargar Catálogo (Excel / CSV)", 
             "⏪ Restaurar Versión Anterior"
         ])
 
@@ -60,37 +60,31 @@ def mostrar(df_catalogo, acceso_propietaria):
                     else:
                         df_final = df_cambios.copy()
 
-                    df_final = limpiar_y_preparar_catalogo(df_final)
                     registrar_en_historial(df_catalogo)
                     
-                    # Guardamos directamente en la Base de Datos
+                    # Guardamos usando la función universal de base de datos que actualiza DB y CSV
                     guardar_catalogo_db(df_final)
                     
-                    st.cache_data.clear()
-                    st.success("¡Precios y catálogo actualizados en la base de datos con éxito!")
+                    st.success("¡Precios y catálogo actualizados con éxito!")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error al guardar los cambios: {e}")
 
         with tab_subir:
-            st.markdown("### 📤 Subir tu Catálogo en Excel")
-            st.info("Sube tu archivo .xlsx con tus productos, costos y precios.")
+            st.markdown("### 📤 Subir tu Catálogo (Excel o CSV)")
+            st.info("Sube tu archivo .xlsx o .csv con tus productos, costos y precios.")
             
-            archivo_subido = st.file_uploader("Selecciona tu archivo Excel", type=["xlsx", "xls"])
+            archivo_subido = st.file_uploader("Selecciona tu archivo", type=["xlsx", "xls", "csv"])
             if archivo_subido is not None:
                 try:
-                    df_subido = pd.read_excel(archivo_subido)
-                    df_subido = limpiar_y_preparar_catalogo(df_subido)
                     registrar_en_historial(df_catalogo)
                     
-                    # Guardamos el Excel directamente en la Base de Datos
-                    guardar_catalogo_db(df_subido)
-                    
-                    st.cache_data.clear()
-                    st.success("¡Catálogo cargado y actualizado en la base de datos correctamente!")
-                    st.rerun()
+                    # Usamos la función global que detecta el formato y actualiza todo de golpe
+                    if guardar_catalogo_db(archivo_subido):
+                        st.success("¡Catálogo cargado y actualizado correctamente en el sistema!")
+                        st.rerun()
                 except Exception as e:
-                    st.error(f"Error al procesar el archivo Excel: {e}")
+                    st.error(f"Error al procesar el archivo: {e}")
 
         with tab_restaurar:
             st.markdown("### ⏪ Restaurar Versión de Precios Anterior")
@@ -114,11 +108,9 @@ def mostrar(df_catalogo, acceso_propietaria):
                                 registrar_en_historial(df_catalogo)
                                 cols_base = [c for c in df_respaldo_sel.columns if c != "Fecha_Actualizacion"]
                                 df_restaurado = df_respaldo_sel[cols_base].copy()
-                                df_restaurado = limpiar_y_preparar_catalogo(df_restaurado)
                                 
                                 guardar_catalogo_db(df_restaurado)
 
-                                st.cache_data.clear()
                                 st.success(f"¡Catálogo restaurado exitosamente a la versión de {fecha_sel}!")
                                 st.rerun()
                         else:
