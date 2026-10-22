@@ -4,8 +4,9 @@ import os
 import streamlit as st
 import libsql_client
 
+@st.cache_resource
 def conectar_db():
-    """Crea un cliente síncrono de Turso usando libsql-client de forma segura."""
+    """Crea y almacena en caché el cliente síncrono de Turso para evitar bloqueos."""
     try:
         turso_url = st.secrets["TURSO_URL"]
         turso_token = st.secrets["TURSO_AUTH_TOKEN"]
@@ -13,9 +14,8 @@ def conectar_db():
         client = libsql_client.create_client_sync(url=url_http, auth_token=turso_token)
         return client
     except Exception as e:
-        st.sidebar.warning(f"Modo local por red: {e}")
         return None
-        
+
 def inicializar_tablas():
     """Crea las tablas necesarias en Turso si no existen."""
     client = conectar_db()
@@ -57,11 +57,9 @@ def inicializar_tablas():
         """)
     except Exception as e:
         st.error(f"Error al inicializar tablas: {e}")
-    finally:
-        client.close()
 
-# Inicializar tablas al cargar el módulo
-#inicializar_tablas()
+# Inicializar tablas de forma segura al arrancar
+inicializar_tablas()
 
 # Definición de archivos y variables de respaldo
 CATALOGO_FILE = "catalogo_productos.csv"
@@ -105,19 +103,13 @@ def obtener_catalogo():
         return cargar_catalogo_defecto()
     try:
         rs = client.execute("SELECT * FROM catalogo_productos;")
-        client.close()
         rows = rs.rows
         if not rows:
             df = cargar_catalogo_defecto()
             guardar_catalogo_db(df)
             return df
-        # Convertir a DataFrame de Pandas usando los nombres de columnas
-        columns = rs.columns
-        df = pd.DataFrame(rows, columns=columns)
-        return df
+        return pd.DataFrame(rows, columns=rs.columns)
     except Exception:
-        if client:
-            client.close()
         return cargar_catalogo_defecto()
 
 def guardar_catalogo_db(df):
@@ -125,7 +117,6 @@ def guardar_catalogo_db(df):
     if not client:
         return
     try:
-        # Reemplazar catálogo: borramos y reinsertamos
         client.execute("DELETE FROM catalogo_productos;")
         for _, row in df.iterrows():
             client.execute(
@@ -134,8 +125,6 @@ def guardar_catalogo_db(df):
             )
     except Exception as e:
         st.error(f"Error al guardar catálogo: {e}")
-    finally:
-        client.close()
 
 def obtener_clientes_recurrentes_lista():
     client = conectar_db()
@@ -143,11 +132,8 @@ def obtener_clientes_recurrentes_lista():
         return []
     try:
         rs = client.execute("SELECT Cliente FROM clientes_recurrentes;")
-        client.close()
         return [str(row[0]).strip() for row in rs.rows if row[0] and str(row[0]).strip()]
     except Exception:
-        if client:
-            client.close()
         return []
 
 def guardar_cliente_recurrente(nuevo_cliente):
@@ -159,11 +145,8 @@ def guardar_cliente_recurrente(nuevo_cliente):
         return False
     try:
         client.execute("INSERT OR IGNORE INTO clientes_recurrentes (Cliente) VALUES (?);", (cliente_clean,))
-        client.close()
         return True
     except Exception:
-        if client:
-            client.close()
         return False
 
 def eliminar_cliente_recurrente(cliente_eliminar):
@@ -172,11 +155,8 @@ def eliminar_cliente_recurrente(cliente_eliminar):
         return False
     try:
         client.execute("DELETE FROM clientes_recurrentes WHERE TRIM(LOWER(Cliente)) = TRIM(LOWER(?));", (cliente_eliminar.strip(),))
-        client.close()
         return True
     except Exception:
-        if client:
-            client.close()
         return False
 
 def guardar_venta_db(df_ventas):
@@ -200,11 +180,8 @@ def guardar_venta_db(df_ventas):
                     float(row.get("Cantidad", 0.0))
                 )
             )
-        client.close()
         return True
     except Exception as e:
-        if client:
-            client.close()
         st.error(f"Error al guardar venta: {e}")
         return False
 
@@ -215,12 +192,9 @@ def obtener_historial_ventas():
         return pd.DataFrame()
     try:
         rs = client.execute("SELECT * FROM registro_ventas;")
-        client.close()
         rows = rs.rows
         if not rows:
             return pd.DataFrame()
         return pd.DataFrame(rows, columns=rs.columns)
     except Exception:
-        if client:
-            client.close()
         return pd.DataFrame()
