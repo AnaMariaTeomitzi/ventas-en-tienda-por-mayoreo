@@ -106,55 +106,51 @@ def limpiar_y_preparar_catalogo(df):
     df = df.dropna(how='all', axis=1).dropna(how='all', axis=0)
     df = df.loc[:, ~df.columns.str.contains('^Unnamed', case=False, na=False)]
     
-    # Normalizar nombres de columnas del Excel de forma flexible
+    # Mapeo directo basado en las posiciones y nombres reales de tu Excel
+    columnas_actuales = list(df.columns)
+    
+    # Renombramos según el orden exacto de tus columnas
     renombres = {}
-    for col in df.columns:
+    for i, col in enumerate(columnas_actuales):
         c_lower = str(col).strip().lower()
-        if c_lower in ['sku', 'código', 'codigo', 'id', 'clave']:
-            renombres[col] = 'SKU'
-        elif c_lower in ['producto', 'nombre', 'articulo', 'artículo', 'descripción', 'descripcion']:
+        if i == 0 or 'concepto' in c_lower or 'producto' in c_lower or 'nombre' in c_lower:
             renombres[col] = 'Producto'
-        elif c_lower in ['costo', 'costo_unitario', 'costo real', 'precio compra']:
+        elif i == 1 or 'pr' in c_lower or 'costo' in c_lower:
             renombres[col] = 'Costo'
-        elif c_lower in ['precio_menudeo', 'menudeo', 'precio menudeo', 'precio 1', 'precio']:
+        elif i == 2 or 'venta' in c_lower or 'menudeo' in c_lower:
             renombres[col] = 'Precio_Menudeo'
-        elif c_lower in ['precio_mayoreo_1', 'mayoreo 1', 'precio_mayoreo1', 'precio 2']:
+        elif i == 3 or 'mayore' in c_lower:
             renombres[col] = 'Precio_Mayoreo_1'
-        elif c_lower in ['precio_mayoreo_2', 'mayoreo 2', 'precio_mayoreo2', 'precio 3']:
+        elif i == 4 or 'super' in c_lower or 'especial' in c_lower:
             renombres[col] = 'Precio_Mayoreo_2'
-        elif c_lower in ['precio_especial', 'especial', 'precio especial']:
-            renombres[col] = 'Precio_Especial'
-        elif c_lower in ['stock', 'existencia', 'cantidad', 'inventario']:
-            renombres[col] = 'Stock'
             
     df = df.rename(columns=renombres)
     
-    # Si el Excel NO tiene columna SKU pero tiene Producto (o la primera columna es el nombre)
+    # Insertar un SKU automático ya que tu Excel no lo trae
     if 'SKU' not in df.columns:
-        if 'Producto' in df.columns:
-            df.insert(0, 'SKU', [f"P{i+1:03d}" for i in range(len(df))])
-        else:
-            cols_actuales = list(df.columns)
-            if len(cols_actuales) >= 1:
-                df = df.rename(columns={cols_actuales[0]: 'Producto'})
-                df.insert(0, 'SKU', [f"P{i+1:03d}" for i in range(len(df))])
+        df.insert(0, 'SKU', [f"P{i+1:03d}" for i in range(len(df))])
 
-    # Si hay SKU pero no Producto, nombramos la siguiente columna como Producto
-    if 'SKU' in df.columns and 'Producto' not in df.columns:
-        cols_restantes = [c for c in df.columns if c != 'SKU']
-        if cols_restantes:
-            df = df.rename(columns={cols_restantes[0]: 'Producto'})
-
-    # Asegurar que existan todas las columnas obligatorias en orden correcto
+    # Asegurar que existan todas las columnas requeridas por la base de datos
     cols_requeridas = ['SKU', 'Producto', 'Costo', 'Precio_Menudeo', 'Precio_Mayoreo_1', 'Precio_Mayoreo_2', 'Precio_Especial', 'Stock']
     for c in cols_requeridas:
         if c not in df.columns:
             if c in ['Costo', 'Precio_Menudeo', 'Precio_Mayoreo_1', 'Precio_Mayoreo_2', 'Precio_Especial']:
                 df[c] = 0.0
             elif c == 'Stock':
-                df[c] = 0
+                df[c] = 100 # Stock predeterminado para que no vaya en cero
             else:
                 df[c] = ""
+
+    # Limpieza de valores numéricos (quitando $, comas y convirtiendo a float)
+    cols_num = ['Costo', 'Precio_Menudeo', 'Precio_Mayoreo_1', 'Precio_Mayoreo_2', 'Precio_Especial']
+    for col in cols_num:
+        if col in df.columns:
+            serie_limpia = df[col].astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False).str.strip()
+            df[col] = pd.to_numeric(serie_limpia, errors='coerce').fillna(0.0)
+
+    if 'Stock' in df.columns:
+        serie_stock = df['Stock'].astype(str).str.replace(',', '', regex=False).str.strip()
+        df['Stock'] = pd.to_numeric(serie_stock, errors='coerce').fillna(100).astype(int)
                 
     df = df[cols_requeridas]
     return df
