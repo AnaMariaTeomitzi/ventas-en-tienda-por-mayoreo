@@ -102,63 +102,6 @@ HISTORIAL_COSTOS_FILE = "historial_costos.csv"
 VENTAS_FILE = "registro_ventas.csv"
 COMPRAS_FILE = "compras.csv"
 
-def limpiar_y_preparar_catalogo(df):
-    if isinstance(df, pd.DataFrame):
-        df = df.loc[:, ~df.columns.duplicated()]
-        df = df.dropna(how='all', axis=1).dropna(how='all', axis=0)
-        cols_validas = [c for c in df.columns if not str(c).startswith('Unnamed')]
-        df = df[cols_validas]
-    
-    columnas_actuales = list(df.columns)
-    
-    renombres = {}
-    for i, col in enumerate(columnas_actuales):
-        c_lower = str(col).strip().lower()
-        if i == 0 or 'concepto' in c_lower or 'producto' in c_lower or 'nombre' in c_lower:
-            renombres[col] = 'Producto'
-        elif i == 1 or 'pr' in c_lower or 'costo' in c_lower:
-            renombres[col] = 'Costo'
-        elif i == 2 or 'venta' in c_lower or 'menudeo' in c_lower:
-            renombres[col] = 'Precio_Menudeo'
-        elif i == 3 or 'mayore' in c_lower:
-            renombres[col] = 'Precio_Mayoreo_1'
-        elif i == 4 or 'super' in c_lower or 'especial' in c_lower:
-            renombres[col] = 'Precio_Mayoreo_2'
-            
-    df = df.rename(columns=renombres)
-    
-    if 'SKU' not in df.columns:
-        df.insert(0, 'SKU', [f"P{i+1:03d}" for i in range(len(df))])
-
-    cols_requeridas = ['SKU', 'Producto', 'Costo', 'Precio_Menudeo', 'Precio_Mayoreo_1', 'Precio_Mayoreo_2', 'Precio_Especial', 'Stock']
-    for c in cols_requeridas:
-        if c not in df.columns:
-            if c in ['Costo', 'Precio_Menudeo', 'Precio_Mayoreo_1', 'Precio_Mayoreo_2', 'Precio_Especial']:
-                df[c] = 0.0
-            elif c == 'Stock':
-                df[c] = 100 
-            else:
-                df[c] = ""
-
-    cols_num = ['Costo', 'Precio_Menudeo', 'Precio_Mayoreo_1', 'Precio_Mayoreo_2', 'Precio_Especial']
-    for col in cols_num:
-        if col in df.columns:
-            serie = df[col]
-            if isinstance(serie, pd.DataFrame):
-                serie = serie.iloc[:, 0]
-            serie_limpia = serie.astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False).str.strip()
-            df[col] = pd.to_numeric(serie_limpia, errors='coerce').fillna(0.0)
-
-    if 'Stock' in df.columns:
-        serie_stock = df['Stock']
-        if isinstance(serie_stock, pd.DataFrame):
-            serie_stock = serie_stock.iloc[:, 0]
-        serie_stock_limpia = serie_stock.astype(str).str.replace(',', '', regex=False).str.strip()
-        df['Stock'] = pd.to_numeric(serie_stock_limpia, errors='coerce').fillna(100).astype(int)
-                
-    df = df[cols_requeridas]
-    return df
-
 def guardar_catalogo_db(df):
     tipo, conn = conectar_db()
     try:
@@ -168,10 +111,16 @@ def guardar_catalogo_db(df):
             
         df = limpiar_y_preparar_catalogo(df)
         
-        df["SKU"] = df["SKU"].astype(str).str.strip()
-        df["SKU"] = df["SKU"].apply(lambda x: x[:-2] if x.endswith('.0') else x)
+        # Garantizar que SKU sea una Serie plana de strings (evita ambigüedades de DataFrame)
+        sku_col = df["SKU"]
+        if isinstance(sku_col, pd.DataFrame):
+            sku_col = sku_col.iloc[:, 0]
+            
+        sku_limpio = sku_col.astype(str).str.strip()
+        sku_limpio = sku_limpio.apply(lambda x: x[:-2] if x.endswith('.0') else x)
+        df["SKU"] = sku_limpio
         
-        # Filtro booleano explícito y seguro para Pandas
+        # Filtro booleano explícito y seguro
         mask = (df["SKU"] != "") & (df["SKU"].str.lower() != "nan") & (df["SKU"].notna())
         df = df[mask]
         
