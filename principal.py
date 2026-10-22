@@ -1,5 +1,9 @@
 import streamlit as st
 import pandas as pd
+from modulos import config_impresora
+
+
+
 
 # Importar funciones desde la carpeta modulos
 from modulos.base_datos import obtener_catalogo, CATALOGO_FILE, HISTORIAL_COSTOS_FILE, VENTAS_FILE, COMPRAS_FILE, limpiar_y_preparar_catalogo, registrar_en_historial
@@ -135,6 +139,9 @@ elif opcion_menu == "📊 Reportes y Deudas":
 
 elif opcion_menu == "👥 Historial por Cliente":
     clientes_historial.mostrar(acceso_propietaria)
+    
+elif opcion_menu == "⚙️ Configuración Impresora":
+    config_impresora.mostrar()
 
 elif opcion_menu == "⭐ Gestión Clientes Recurrentes":
     clientes_recurrentes.mostrar(acceso_propietaria)
