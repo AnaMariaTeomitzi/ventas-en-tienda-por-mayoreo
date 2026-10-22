@@ -168,6 +168,18 @@ def guardar_catalogo_db(df):
             
         df = limpiar_y_preparar_catalogo(df)
         
+        # Función auxiliar para asegurar que cada celda sea un valor escalar único
+        def to_scalar(val, default=0.0, is_int=False):
+            if isinstance(val, pd.Series):
+                val = val.iloc[0]
+            try:
+                num = pd.to_numeric(val, errors='coerce')
+                if pd.isna(num):
+                    return default
+                return int(num) if is_int else float(num)
+            except Exception:
+                return str(val) if default == "" else default
+
         sku_col = df["SKU"]
         if isinstance(sku_col, pd.DataFrame):
             sku_col = sku_col.iloc[:, 0]
@@ -185,14 +197,14 @@ def guardar_catalogo_db(df):
 
         if tipo == "turso":
             for _, row in df.iterrows():
-                sku = str(row["SKU"]).strip()
-                producto = str(row["Producto"]).strip()
-                costo = float(row["Costo"])
-                p_menudeo = float(row["Precio_Menudeo"])
-                p_may1 = float(row["Precio_Mayoreo_1"])
-                p_may2 = float(row["Precio_Mayoreo_2"])
-                p_esp = float(row["Precio_Especial"])
-                stock = int(row["Stock"])
+                sku = str(to_scalar(row.get("SKU", ""), default="")).strip()
+                producto = str(to_scalar(row.get("Producto", ""), default="")).strip()
+                costo = to_scalar(row.get("Costo", 0.0), default=0.0)
+                p_menudeo = to_scalar(row.get("Precio_Menudeo", 0.0), default=0.0)
+                p_may1 = to_scalar(row.get("Precio_Mayoreo_1", 0.0), default=0.0)
+                p_may2 = to_scalar(row.get("Precio_Mayoreo_2", 0.0), default=0.0)
+                p_esp = to_scalar(row.get("Precio_Especial", 0.0), default=0.0)
+                stock = to_scalar(row.get("Stock", 100), default=100, is_int=True)
 
                 conn.execute(
                     "INSERT OR REPLACE INTO catalogo_productos (SKU, Producto, Costo, Precio_Menudeo, Precio_Mayoreo_1, Precio_Mayoreo_2, Precio_Especial, Stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
@@ -205,7 +217,6 @@ def guardar_catalogo_db(df):
     except Exception as e:
         st.error(f"Error al guardar catálogo en la base de datos: {e}")
         return False
-
 def limpiar_columna_numerica(serie):
     if isinstance(serie, pd.DataFrame):
         serie = serie.iloc[:, 0]
