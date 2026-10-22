@@ -104,7 +104,6 @@ COMPRAS_FILE = "compras.csv"
 
 def limpiar_y_preparar_catalogo(df):
     if isinstance(df, pd.DataFrame):
-        # Eliminar columnas duplicadas si el Excel tiene encabezados repetidos
         df = df.loc[:, ~df.columns.duplicated()]
         df = df.dropna(how='all', axis=1).dropna(how='all', axis=0)
         cols_validas = [c for c in df.columns if not str(c).startswith('Unnamed')]
@@ -112,7 +111,6 @@ def limpiar_y_preparar_catalogo(df):
     
     columnas_actuales = list(df.columns)
     
-    # Mapeo directo basado en las posiciones y nombres reales de tu Excel
     renombres = {}
     for i, col in enumerate(columnas_actuales):
         c_lower = str(col).strip().lower()
@@ -129,11 +127,9 @@ def limpiar_y_preparar_catalogo(df):
             
     df = df.rename(columns=renombres)
     
-    # Insertar un SKU automático ya que tu Excel no lo trae
     if 'SKU' not in df.columns:
         df.insert(0, 'SKU', [f"P{i+1:03d}" for i in range(len(df))])
 
-    # Asegurar que existan todas las columnas requeridas por la base de datos
     cols_requeridas = ['SKU', 'Producto', 'Costo', 'Precio_Menudeo', 'Precio_Mayoreo_1', 'Precio_Mayoreo_2', 'Precio_Especial', 'Stock']
     for c in cols_requeridas:
         if c not in df.columns:
@@ -144,7 +140,6 @@ def limpiar_y_preparar_catalogo(df):
             else:
                 df[c] = ""
 
-    # Limpieza de valores numéricos garantizando columnas individuales
     cols_num = ['Costo', 'Precio_Menudeo', 'Precio_Mayoreo_1', 'Precio_Mayoreo_2', 'Precio_Especial']
     for col in cols_num:
         if col in df.columns:
@@ -163,6 +158,49 @@ def limpiar_y_preparar_catalogo(df):
                 
     df = df[cols_requeridas]
     return df
+
+def guardar_catalogo_db(df):
+    tipo, conn = conectar_db()
+    try:
+        if df is None or getattr(df, 'empty', True):
+            st.error("El archivo Excel está vacío o no se pudo leer.")
+            return False
+            
+        df = limpiar_y_preparar_catalogo(df)
+        
+        df["SKU"] = df["SKU"].astype(str).str.strip()
+        df["SKU"] = df["SKU"].apply(lambda x: x[:-2] if x.endswith('.0') else x)
+        
+        # Filtro booleano explícito y seguro para Pandas
+        mask = (df["SKU"] != "") & (df["SKU"].str.lower() != "nan") & (df["SKU"].notna())
+        df = df[mask]
+        
+        if df.empty:
+            st.error("El archivo no contiene productos con un SKU válido para guardar.")
+            return False
+
+        if tipo == "turso":
+            for _, row in df.iterrows():
+                sku = str(row["SKU"]).strip()
+                producto = str(row["Producto"]).strip()
+                costo = float(row["Costo"])
+                p_menudeo = float(row["Precio_Menudeo"])
+                p_may1 = float(row["Precio_Mayoreo_1"])
+                p_may2 = float(row["Precio_Mayoreo_2"])
+                p_esp = float(row["Precio_Especial"])
+                stock = int(row["Stock"])
+
+                conn.execute(
+                    "INSERT OR REPLACE INTO catalogo_productos (SKU, Producto, Costo, Precio_Menudeo, Precio_Mayoreo_1, Precio_Mayoreo_2, Precio_Especial, Stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
+                    (sku, producto, costo, p_menudeo, p_may1, p_may2, p_esp, stock)
+                )
+        else:
+            df.to_sql("catalogo_productos", conn, if_exists="replace", index=False)
+            
+        return True
+    except Exception as e:
+        st.error(f"Error al guardar catálogo en la base de datos: {e}")
+        return False
     
 def limpiar_columna_numerica(serie):
     if isinstance(serie, pd.DataFrame):
