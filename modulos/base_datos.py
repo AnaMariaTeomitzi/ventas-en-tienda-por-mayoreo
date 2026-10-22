@@ -71,8 +71,9 @@ CLIENTES_RECURRENTES_FILE = "clientes_recurrentes.csv"
 def limpiar_y_preparar_catalogo(df):
     df = df.dropna(how='all', axis=1).dropna(how='all', axis=0)
     df = df.loc[:, ~df.columns.str.contains('^Unnamed', case=False, na=False)]
-    
-   def limpiar_columna_numerica(serie):
+    return df
+
+def limpiar_columna_numerica(serie):
     # Si por alguna columna duplicada llega un DataFrame, extraemos la primera columna
     if isinstance(serie, pd.DataFrame):
         serie = serie.iloc[:, 0]
@@ -81,6 +82,7 @@ def limpiar_y_preparar_catalogo(df):
         serie = serie.astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False).str.strip()
     
     return pd.to_numeric(serie, errors='coerce').fillna(0.0)
+
 def registrar_en_historial(df):
     pass
 
@@ -152,7 +154,8 @@ def eliminar_cliente_recurrente(cliente_eliminar):
     except Exception:
         conn.close()
         return False
-        def guardar_venta_db(df_ventas):
+
+def guardar_venta_db(df_ventas):
     """Guarda los registros de venta directamente en la tabla de Turso."""
     conn = conectar_db()
     try:
@@ -172,4 +175,4 @@ def obtener_historial_ventas():
         return df
     except Exception:
         conn.close()
-        return pd.DataFrame()
+        return pd.DataFrame()rn pd.DataFrame()
