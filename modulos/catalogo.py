@@ -32,11 +32,11 @@ def mostrar(df_catalogo, acceso_propietaria):
             "⏪ Restaurar Versión Anterior"
         ])
 
-      with tab_editar:
+     with tab_editar:
             st.markdown("### ✏️ Edición Rápida de Precios y Productos")
             st.info("Puedes hacer doble clic en cualquier celda para cambiar precios o nombres. Al terminar, haz clic en **'💾 Guardar Cambios en Catálogo'**.")
             
-            # Usamos el dataframe completo o el filtrado asegurándonos de conservar el catálogo general
+            # Mostramos el editor usando el DataFrame filtrado para la vista
             df_editado = st.data_editor(
                 df_filtrado, 
                 use_container_width=True, 
@@ -44,21 +44,29 @@ def mostrar(df_catalogo, acceso_propietaria):
                 key="editor_catalogo"
             )
 
-         if st.button("💾 Guardar Cambios en Catálogo", use_container_width=True):
+            if st.button("💾 Guardar Cambios en Catálogo", use_container_width=True):
                 try:
+                    # Obtenemos la tabla completa directamente desde el estado del editor en la sesión
+                    # Si hubo búsqueda, actualizamos los registros modificados en el catálogo general.
                     df_final = df_catalogo.copy()
+                    df_cambios = st.session_state["editor_catalogo"]
+                    
                     if busqueda and "SKU" in df_final.columns:
-                        for _, row in df_editado.iterrows():
+                        # Actualizamos fila por fila basándonos en el SKU editado
+                        for _, row in df_cambios.iterrows():
                             sku_val = row["SKU"]
                             df_final.loc[df_final["SKU"] == sku_val] = row
                     else:
-                        df_final = df_editado.copy()
+                        # Si no hay búsqueda activa, el editor contiene todo el catálogo
+                        df_final = df_cambios.copy()
 
+                    # Limpiamos, respaldamos y guardamos de forma persistente
                     df_final = limpiar_y_preparar_catalogo(df_final)
                     registrar_en_historial(df_catalogo)
                     df_final.to_csv(CATALOGO_FILE, index=False)
                     
                     st.success("¡Precios y catálogo actualizados con éxito!")
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Error al guardar los cambios: {e}")
 
