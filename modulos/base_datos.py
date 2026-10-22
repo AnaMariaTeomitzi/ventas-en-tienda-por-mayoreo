@@ -6,7 +6,7 @@ import libsql_client
 
 @st.cache_resource
 def conectar_db():
-    """Crea y almacena en caché el cliente síncrono de Turso para evitar bloqueos."""
+    """Crea y almacena en caché el cliente síncrono de Turso."""
     try:
         turso_url = st.secrets["TURSO_URL"]
         turso_token = st.secrets["TURSO_AUTH_TOKEN"]
@@ -16,11 +16,8 @@ def conectar_db():
     except Exception as e:
         return None
 
-def inicializar_tablas():
-    """Crea las tablas necesarias en Turso si no existen."""
-    client = conectar_db()
-    if not client:
-        return
+def inicializar_tablas_si_es_necesario(client):
+    """Crea las tablas en Turso de forma segura si no existen."""
     try:
         client.execute("""
             CREATE TABLE IF NOT EXISTS catalogo_productos (
@@ -34,7 +31,6 @@ def inicializar_tablas():
                 Stock INTEGER
             );
         """)
-        
         client.execute("""
             CREATE TABLE IF NOT EXISTS registro_ventas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,17 +45,13 @@ def inicializar_tablas():
                 Cantidad REAL
             );
         """)
-        
         client.execute("""
             CREATE TABLE IF NOT EXISTS clientes_recurrentes (
                 Cliente TEXT PRIMARY KEY
             );
         """)
-    except Exception as e:
-        st.error(f"Error al inicializar tablas: {e}")
-
-# Inicializar tablas de forma segura al arrancar
-inicializar_tablas()
+    except Exception:
+        pass
 
 # Definición de archivos y variables de respaldo
 CATALOGO_FILE = "catalogo_productos.csv"
@@ -102,6 +94,7 @@ def obtener_catalogo():
     if not client:
         return cargar_catalogo_defecto()
     try:
+        inicializar_tablas_si_es_necesario(client)
         rs = client.execute("SELECT * FROM catalogo_productos;")
         rows = rs.rows
         if not rows:
@@ -117,6 +110,7 @@ def guardar_catalogo_db(df):
     if not client:
         return
     try:
+        inicializar_tablas_si_es_necesario(client)
         client.execute("DELETE FROM catalogo_productos;")
         for _, row in df.iterrows():
             client.execute(
@@ -131,6 +125,7 @@ def obtener_clientes_recurrentes_lista():
     if not client:
         return []
     try:
+        inicializar_tablas_si_es_necesario(client)
         rs = client.execute("SELECT Cliente FROM clientes_recurrentes;")
         return [str(row[0]).strip() for row in rs.rows if row[0] and str(row[0]).strip()]
     except Exception:
@@ -144,6 +139,7 @@ def guardar_cliente_recurrente(nuevo_cliente):
     if not client:
         return False
     try:
+        inicializar_tablas_si_es_necesario(client)
         client.execute("INSERT OR IGNORE INTO clientes_recurrentes (Cliente) VALUES (?);", (cliente_clean,))
         return True
     except Exception:
@@ -154,6 +150,7 @@ def eliminar_cliente_recurrente(cliente_eliminar):
     if not client:
         return False
     try:
+        inicializar_tablas_si_es_necesario(client)
         client.execute("DELETE FROM clientes_recurrentes WHERE TRIM(LOWER(Cliente)) = TRIM(LOWER(?));", (cliente_eliminar.strip(),))
         return True
     except Exception:
@@ -165,6 +162,7 @@ def guardar_venta_db(df_ventas):
     if not client:
         return False
     try:
+        inicializar_tablas_si_es_necesario(client)
         for _, row in df_ventas.iterrows():
             client.execute(
                 "INSERT INTO registro_ventas (Fecha, Sucursal, Cliente, SKU, Producto, Nivel_Precio, Precio_Unitario, Costo_Unitario, Cantidad) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
@@ -191,6 +189,7 @@ def obtener_historial_ventas():
     if not client:
         return pd.DataFrame()
     try:
+        inicializar_tablas_si_es_necesario(client)
         rs = client.execute("SELECT * FROM registro_ventas;")
         rows = rs.rows
         if not rows:
