@@ -18,14 +18,14 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
             horizontal=True
         )
 
-      if tipo_cliente == "⭐ Cliente Recurrente (Lista)":
+        if tipo_cliente == "⭐ Cliente Recurrente (Lista)":
             if lista_recurrentes_nombres:
-                # st.selectbox en Streamlit permite escribir para buscar y filtrar automáticamente
+                # Selectbox nativo con capacidad de autocompletado al teclear y menú desplegable
                 cliente = st.selectbox(
-                    "Busca o selecciona el Cliente Recurrente:", 
+                    "Selecciona el Cliente Recurrente:", 
                     options=lista_recurrentes_nombres,
                     index=0,
-                    help="Escribe las primeras letras del cliente para autocompletar o despliega la lista."
+                    help="Escribe para autocompletar o despliega la lista."
                 )
             else:
                 st.info("Aún no hay clientes recurrentes dados de alta. Ingresa el nombre como nuevo cliente.")
@@ -196,7 +196,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
         st.markdown("---")
         st.markdown(f"### 💰 **Total a Pagar / Cotizar:** `${total_general:,.2f} MXN`")
 
-        # --- NUEVA SECCIÓN: TIPO DE OPERACIÓN Y PAGO ---
+        # --- SECCIÓN: TIPO DE OPERACIÓN Y PAGO ---
         st.markdown("### 💳 Tipo de Operación y Forma de Pago")
         
         tipo_operacion = st.radio(
@@ -254,7 +254,6 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                 st.rerun()
 
         with col_acc2:
-            # Validamos que si es efectivo, el monto recibido cubra el total
             pago_valido = True
             if tipo_operacion == "🛒 Venta Confirmada" and metodo_pago == "Efectivo 💵" and monto_recibido < total_general:
                 pago_valido = False
