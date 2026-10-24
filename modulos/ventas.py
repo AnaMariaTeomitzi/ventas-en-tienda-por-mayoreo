@@ -188,16 +188,74 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
             st.rerun()
 
         st.markdown("---")
-        st.markdown(f"### 💰 **Total a Pagar:** `${total_general:,.2f} MXN`")
+        st.markdown(f"### 💰 **Total a Pagar / Cotizar:** `${total_general:,.2f} MXN`")
 
+        # --- NUEVA SECCIÓN: TIPO DE OPERACIÓN Y PAGO ---
+        st.markdown("### 💳 Tipo de Operación y Forma de Pago")
+        
+        tipo_operacion = st.radio(
+            "Selecciona el Tipo de Operación:",
+            options=["🛒 Venta Confirmada", "📄 Presupuesto / Cotización"],
+            horizontal=True
+        )
+
+        metodo_pago = "N/A"
+        monto_recibido = total_general
+        cambio = 0.0
+        referencia_pago = ""
+
+        if tipo_operacion == "🛒 Venta Confirmada":
+            col_metodo, col_detalle = st.columns([1, 1.2])
+            
+            with col_metodo:
+                metodo_pago = st.selectbox(
+                    "Método de Pago:",
+                    ["Efectivo 💵", "Transferencia / Mercado Pago 📱", "Tarjeta (Débito/Crédito) 💳"]
+                )
+                
+            with col_detalle:
+                if metodo_pago == "Efectivo 💵":
+                    monto_recibido = st.number_input(
+                        "Monto Recibido de Cliente ($):", 
+                        min_value=0.0, 
+                        value=float(total_general), 
+                        step=10.0,
+                        format="%.2f"
+                    )
+                    cambio = monto_recibido - total_general
+                    
+                    if monto_recibido >= total_general:
+                        st.metric(label="Cambio a Entregar", value=f"${cambio:,.2f} MXN")
+                    else:
+                        falta = total_general - monto_recibido
+                        st.warning(f"⚠️ Cantidad insuficiente. Faltan: **${falta:,.2f} MXN**")
+
+                elif metodo_pago == "Transferencia / Mercado Pago 📱":
+                    referencia_pago = st.text_input("Folio / Clave de Rastreo (Opcional):", placeholder="Ej. 123456789")
+                    st.info("ℹ️ Asegúrate de verificar que el dinero se refleje en la cuenta antes de finalizar.")
+
+                elif metodo_pago == "Tarjeta (Débito/Crédito) 💳":
+                    referencia_pago = st.text_input("Número de Autorización / Voucher (Opcional):", placeholder="Ej. 004521")
+        else:
+            st.info("ℹ️ **Modo Presupuesto:** No se registrará inventario ni afectará el corte de caja general. Se generará un ticket con desglose de cotización.")
+
+        st.markdown("---")
         col_acc1, col_acc2 = st.columns(2)
+        
         with col_acc1:
             if st.button("🗑️ Vaciar Carrito Completo", use_container_width=True):
                 st.session_state.carrito = []
                 st.rerun()
 
         with col_acc2:
-            if st.button("✅ Confirmar y Guardar Venta Completa", use_container_width=True):
+            # Validamos que si es efectivo, el monto recibido cubra el total
+            pago_valido = True
+            if tipo_operacion == "🛒 Venta Confirmada" and metodo_pago == "Efectivo 💵" and monto_recibido < total_general:
+                pago_valido = False
+
+            texto_boton = "✅ Confirmar y Guardar Venta" if tipo_operacion == "🛒 Venta Confirmada" else "📄 Generar Presupuesto"
+            
+            if st.button(texto_boton, type="primary", use_container_width=True, disabled=not pago_valido):
                 ahora = datetime.now()
                 items_finales = []
                 for item in st.session_state.carrito:
@@ -232,34 +290,49 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                         "Total_Venta": float(t_linea),
                         "Costo_Total": float(c_total),
                         "Ganancia": float(ganancia),
-                        "Fecha_Hora": ahora.strftime("%Y-%m-%d %H:%M:%S")
+                        "Fecha_Hora": ahora.strftime("%Y-%m-%d %H:%M:%S"),
+                        "Tipo_Operacion": tipo_operacion,
+                        "Metodo_Pago": metodo_pago,
+                        "Monto_Recibido": float(monto_recibido),
+                        "Cambio": float(cambio),
+                        "Referencia": referencia_pago
                     })
 
                 df_final_venta = pd.DataFrame(items_finales)
                 
-                exito = guardar_venta_db(df_final_venta)
-
-                try:
-                    if os.path.exists(VENTAS_FILE):
-                        df_old_ventas = pd.read_csv(VENTAS_FILE)
-                        df_combined_ventas = pd.concat([df_old_ventas, df_final_venta], ignore_index=True)
-                        df_combined_ventas.to_csv(VENTAS_FILE, index=False)
-                    else:
-                        df_final_venta.to_csv(VENTAS_FILE, index=False)
-                except Exception:
-                    pass
+                exito = True
+                if tipo_operacion == "🛒 Venta Confirmada":
+                    exito = guardar_venta_db(df_final_venta)
+                    try:
+                        if os.path.exists(VENTAS_FILE):
+                            df_old_ventas = pd.read_csv(VENTAS_FILE)
+                            df_combined_ventas = pd.concat([df_old_ventas, df_final_venta], ignore_index=True)
+                            df_combined_ventas.to_csv(VENTAS_FILE, index=False)
+                        else:
+                            df_final_venta.to_csv(VENTAS_FILE, index=False)
+                    except Exception:
+                        pass
 
                 if exito:
-                    st.success(f"⭐ ¡Venta registrada y sincronizada con éxito para '{cliente.strip()}'!")
+                    if tipo_operacion == "🛒 Venta Confirmada":
+                        st.success(f"⭐ ¡Venta registrada y sincronizada con éxito para '{cliente.strip()}'!")
+                    else:
+                        st.success(f"📄 ¡Presupuesto generado con éxito para '{cliente.strip()}'!")
+                        
                     st.session_state.ultimo_ticket = {
+                        "tipo_operacion": tipo_operacion,
                         "cliente": cliente.strip(),
                         "sucursal": sucursal_activa,
                         "fecha": ahora.strftime("%Y-%m-%d %H:%M:%S"),
                         "items": items_finales,
-                        "total": total_general
+                        "total": total_general,
+                        "metodo_pago": metodo_pago,
+                        "monto_recibido": monto_recibido,
+                        "cambio": cambio,
+                        "referencia": referencia_pago
                     }
                 else:
-                    st.warning("Venta procesada, pero hubo un detalle al sincronizar con la base de datos principal.")
+                    st.warning("Operación procesada, pero hubo un detalle al sincronizar con la base de datos.")
 
                 st.session_state.carrito = []
                 st.rerun()
@@ -282,12 +355,26 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
         fecha_str = str(t['fecha'])
         cliente_str = str(t['cliente'])
         total_str = f"${t['total']:,.2f}"
+        tipo_op_str = str(t.get('tipo_operacion', 'VENTA'))
+        metodo_pago_str = str(t.get('metodo_pago', 'N/A'))
+        monto_recibido_val = float(t.get('monto_recibido', t['total']))
+        cambio_val = float(t.get('cambio', 0.0))
+
+        pago_info_html = ""
+        pago_info_escpos = ""
+        if "Venta" in tipo_op_str:
+            pago_info_html += f"Método: {metodo_pago_str}<br>"
+            pago_info_escpos += f"Metodo: {metodo_pago_str}\\n"
+            if "Efectivo" in metodo_pago_str:
+                pago_info_html += f"Recibido: ${monto_recibido_val:,.2f}<br>Cambio: ${cambio_val:,.2f}<br>"
+                pago_info_escpos += f"Recibido: ${monto_recibido_val:,.2f}\\nCambio: ${cambio_val:,.2f}\\n"
 
         items_html = '<br>'.join([f"{itm['Producto']}<br>&nbsp;&nbsp;Cant: {int(itm['Cantidad'])} | Total: ${itm['Total_Venta']:,.2f}" for itm in t['items']])
 
         bluetooth_vta_html = f"""
         <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px solid #ddd; max-width: 320px; font-family: 'Courier New', monospace;">
             <div style="text-align: center; font-weight: bold; font-size: 14px;">TEXTIL ANIT MARI</div>
+            <div style="text-align: center; font-size: 11px; font-weight: bold;">*** {tipo_op_str.upper()} ***</div>
             <div style="text-align: center; font-size: 11px;">Sucursal: {sucursal_str}</div>
             <div style="text-align: center; font-size: 11px;">{fecha_str}</div>
             <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
@@ -297,9 +384,13 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                 {items_html}
             </div>
             <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
+            <div style="font-size: 11px;">
+                {pago_info_html}
+            </div>
+            <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
             <div style="text-align: right; font-weight: bold; font-size: 13px;">TOTAL: {total_str}</div>
             <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
-            <div style="text-align: center; font-size: 10px;">¡Gracias por su compra!</div>
+            <div style="text-align: center; font-size: 10px;">¡Gracias por su preferencia!</div>
             
             <br>
             <div style="text-align: center;">
@@ -349,6 +440,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                 let escpos = "\\x1B\\x40"; // Reset
                 escpos += "\\x1B\\x61\\x01"; // Centrar
                 escpos += "TEXTIL ANIT MARI\\n";
+                escpos += "*** {tipo_op_str.upper()} ***\\n";
                 escpos += "Sucursal: {sucursal_str}\\n";
                 escpos += "{fecha_str}\\n";
                 escpos += "--------------------------------\\n";
@@ -359,10 +451,12 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                 {lineas_js}
 
                 escpos += "--------------------------------\\n";
+                escpos += "{pago_info_escpos}";
+                escpos += "--------------------------------\\n";
                 escpos += "\\x1B\\x61\\x02"; // Derecha
                 escpos += "TOTAL: {total_str}\\n\\n";
                 escpos += "\\x1B\\x61\\x01"; // Centrar
-                escpos += "¡Gracias por su compra!\\n\\n\\n";
+                escpos += "¡Gracias por su preferencia!\\n\\n\\n";
 
                 const encoder = new TextEncoder();
                 await writeCharacteristic.writeValue(encoder.encode(escpos));
@@ -374,7 +468,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
         }}
         </script>
         """
-        components.html(bluetooth_vta_html, height=420)
+        components.html(bluetooth_vta_html, height=450)
         
         if st.button("✖️ Cerrar Vista y Nuevo Ticket"):
             del st.session_state.ultimo_ticket
