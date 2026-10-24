@@ -8,6 +8,16 @@ from .base_datos import obtener_clientes_recurrentes_lista, guardar_venta_db, ob
 def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucursal_activa="Tienda Chela"):
     st.title("🛒 Control de Ventas")
 
+    # --- VALIDACIÓN DE HORARIO PERMITIDO DE VENTAS (8:00 AM - 7:00 PM) ---
+    ahora_actual = datetime.now()
+    hora_actual = ahora_actual.hour  # Obtiene la hora en formato 24h (0 - 23)
+
+    # Permitir ventas únicamente entre las 8:00 (8) y las 19:00 (19)
+    horario_permitido = 8 <= hora_actual < 19
+
+    if not horario_permitido:
+        st.warning(f"⏰ **Horario de ventas cerrado.** El registro de ventas solo está disponible de **8:00 AM a 7:00 PM**. (Hora actual: {ahora_actual.strftime('%I:%M %p')})")
+
     lista_recurrentes_nombres = obtener_clientes_recurrentes_lista()
 
     col_tipo_cte, col_toggle = st.columns([2, 1])
@@ -20,7 +30,6 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
 
         if tipo_cliente == "⭐ Cliente Recurrente (Lista)":
             if lista_recurrentes_nombres:
-                # Selectbox nativo con capacidad de autocompletado al teclear y menú desplegable
                 cliente = st.selectbox(
                     "Selecciona el Cliente Recurrente:", 
                     options=lista_recurrentes_nombres,
@@ -254,13 +263,17 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                 st.rerun()
 
         with col_acc2:
+            # Validación de pago y de horario permitido
             pago_valido = True
             if tipo_operacion == "🛒 Venta Confirmada" and metodo_pago == "Efectivo 💵" and monto_recibido < total_general:
                 pago_valido = False
 
+            # Si es VENTA y está fuera de horario, deshabilita el botón
+            boton_habilitado = pago_valido and (horario_permitido or tipo_operacion == "📄 Presupuesto / Cotización")
+
             texto_boton = "✅ Confirmar y Guardar Venta" if tipo_operacion == "🛒 Venta Confirmada" else "📄 Generar Presupuesto"
             
-            if st.button(texto_boton, type="primary", use_container_width=True, disabled=not pago_valido):
+            if st.button(texto_boton, type="primary", use_container_width=True, disabled=not boton_habilitado):
                 ahora = datetime.now()
                 items_finales = []
                 for item in st.session_state.carrito:
