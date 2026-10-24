@@ -18,9 +18,15 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
             horizontal=True
         )
 
-        if tipo_cliente == "⭐ Cliente Recurrente (Lista)":
+      if tipo_cliente == "⭐ Cliente Recurrente (Lista)":
             if lista_recurrentes_nombres:
-                cliente = st.selectbox("Selecciona el Cliente Recurrente:", lista_recurrentes_nombres)
+                # st.selectbox en Streamlit permite escribir para buscar y filtrar automáticamente
+                cliente = st.selectbox(
+                    "Busca o selecciona el Cliente Recurrente:", 
+                    options=lista_recurrentes_nombres,
+                    index=0,
+                    help="Escribe las primeras letras del cliente para autocompletar o despliega la lista."
+                )
             else:
                 st.info("Aún no hay clientes recurrentes dados de alta. Ingresa el nombre como nuevo cliente.")
                 cliente = st.text_input("Nombre del Cliente / Negocio", value="Público General")
