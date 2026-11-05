@@ -52,21 +52,34 @@ def mostrar(df_catalogo, acceso_propietaria):
                 try:
                     df_final = df_catalogo.copy()
                     
-                    # Actualizamos directamente utilizando el DataFrame devuelto por el editor 
-                    # y los índices originales preservados por Streamlit.
+                    # Fusionamos los cambios de forma segura sobre el catálogo completo usando el índice original
                     df_final.update(df_editado)
                     
-                    # Si el usuario agregó filas nuevas dinámicamente, las concatenamos al final
+                    # Si se agregaron filas nuevas con num_rows="dynamic"
                     filas_nuevas = df_editado.loc[~df_editado.index.isin(df_catalogo.index)]
                     if not filas_nuevas.empty:
                         df_final = pd.concat([df_final, filas_nuevas], ignore_index=True)
 
+                    # Registramos la versión anterior en el historial antes de sobrescribir
                     registrar_en_historial(df_catalogo)
                     
-                    # Guardamos usando la función universal de base de datos que actualiza DB y CSV
-                    guardar_catalogo_db(df_final)
+                    # --- SINCRONIZACIÓN DIRECTA CON TURSO Y CSV ---
+                    tipo, conn = conectar_db()
+                    if tipo == "turso":
+                        conn.execute("DELETE FROM catalogo_productos;")
+                        for _, row in df_final.iterrows():
+                            conn.execute(
+                                "INSERT OR REPLACE INTO catalogo_productos (SKU, Producto, Costo, Precio_Menudeo, Precio_Mayoreo_1, Precio_Mayoreo_2, Precio_Especial, Stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
+                                (str(row.get("SKU", "")), str(row.get("Producto", "")), float(row.get("Costo", 0)), float(row.get("Precio_Menudeo", 0)), float(row.get("Precio_Mayoreo_1", 0)), float(row.get("Precio_Mayoreo_2", 0)), float(row.get("Precio_Especial", 0)), int(row.get("Stock", 100)))
+                            )
+                    else:
+                        df_final.to_sql("catalogo_productos", conn, if_exists="replace", index=False)
+
+                    # Guardamos también en el archivo CSV local y limpiamos caché
+                    df_final.to_csv(CATALOGO_FILE, index=False)
+                    st.cache_data.clear()
                     
-                    st.success("¡Precios y catálogo actualizados con éxito!")
+                    st.success("¡Precios y catálogo actualizados con éxito en Turso y el sistema!")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error al guardar los cambios: {e}")
