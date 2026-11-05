@@ -52,15 +52,24 @@ def mostrar(df_catalogo, acceso_propietaria):
                 try:
                     df_final = df_catalogo.copy()
                     
-                    # CONVERTIMOS EL ESTADO DEL EDITOR A UN DATAFRAME DE PANDAS VÁLIDO
+                    # Convertimos el contenido editado a un DataFrame de Pandas válido
                     df_cambios = pd.DataFrame(st.session_state["editor_catalogo"])
                     
-                    if busqueda and sku_col in df_final.columns:
-                        for _, row in df_cambios.iterrows():
-                            sku_val = row[sku_col]
-                            df_final.loc[df_final[sku_col] == sku_val] = row
-                    else:
-                        df_final = df_cambios.copy()
+                    if not df_cambios.empty:
+                        if busqueda and sku_col in df_final.columns and sku_col in df_cambios.columns:
+                            # Actualizamos fila por fila de forma segura usando el SKU como llave única
+                            for _, row in df_cambios.iterrows():
+                                sku_val = row[sku_col]
+                                mask = df_final[sku_col].astype(str) == str(sku_val)
+                                if mask.any():
+                                    for col in df_cambios.columns:
+                                        df_final.loc[mask, col] = row[col]
+                                else:
+                                    # Si es un producto nuevo agregado con num_rows="dynamic"
+                                    df_final = pd.concat([df_final, pd.DataFrame([row])], ignore_index=True)
+                        else:
+                            # Si no hubo búsqueda, el editor tiene la tabla completa
+                            df_final = df_cambios.copy()
 
                     registrar_en_historial(df_catalogo)
                     
