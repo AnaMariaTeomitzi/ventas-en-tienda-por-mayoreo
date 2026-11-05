@@ -23,30 +23,59 @@ def mostrar(df_catalogo, acceso_propietaria):
                 df_v = obtener_historial_ventas()
                 
                 if df_v is not None and not df_v.empty:
-                    total_ingresos = pd.to_numeric(df_v["Total_Venta"], errors='coerce').sum()
-                    total_costos_v = pd.to_numeric(df_v["Costo_Total"], errors='coerce').sum()
-                    total_ganancias = pd.to_numeric(df_v["Ganancia"], errors='coerce').sum()
+                    # --- FILTRO DE FECHAS ---
+                    st.markdown("#### 📅 Filtrar por Rango de Fechas")
+                    
+                    # Convertimos la columna Fecha a tipo fecha de Pandas si existe
+                    if "Fecha" in df_v.columns:
+                        df_v["Fecha_dt"] = pd.to_datetime(df_v["Fecha"], errors='coerce')
+                        
+                        min_fecha = df_v["Fecha_dt"].min().date() if not df_v["Fecha_dt"].isna().all() else datetime.now().date()
+                        max_fecha = df_v["Fecha_dt"].max().date() if not df_v["Fecha_dt"].isna().all() else datetime.now().date()
 
-                    col_m1, col_m2, col_m3 = st.columns(3)
-                    col_m1.metric("💵 Ingresos Totales", f"${total_ingresos:,.2f} MXN")
-                    col_m2.metric("📉 Costo Total de Ventas", f"${total_costos_v:,.2f} MXN")
-                    col_m3.metric("⭐ Ganancia Neta", f"${total_ganancias:,.2f} MXN")
+                        col_f1, col_f2 = st.columns(2)
+                        with col_f1:
+                            fecha_inicio = st.date_input("Fecha de Inicio", value=min_fecha, format="YYYY-MM-DD")
+                        with col_f2:
+                            fecha_fin = st.date_input("Fecha de Fin", value=max_fecha, format="YYYY-MM-DD")
 
-                    st.markdown("---")
-                    st.dataframe(df_v, use_container_width=True)
+                        # Filtramos el DataFrame según el rango seleccionado
+                        mask_fecha = (df_v["Fecha_dt"].dt.date >= fecha_inicio) & (df_v["Fecha_dt"].dt.date <= fecha_fin)
+                        df_v_filtrado = df_v.loc[mask_fecha].copy()
+                        
+                        # Quitamos la columna auxiliar de fecha temporal para la visualización
+                        df_v_filtrado = df_v_filtrado.drop(columns=["Fecha_dt"], errors="ignore")
+                    else:
+                        df_v_filtrado = df_v.copy()
+                    --------------------------
 
-                    csv_ventas = df_v.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        label="📥 Descargar Reporte de Ventas en CSV",
-                        data=csv_ventas,
-                        file_name=f"reporte_ventas_{datetime.now().strftime('%Y%m%d')}.csv",
-                        mime="text/csv",
-                        use_container_width=True
-                    )
+                    if not df_v_filtrado.empty:
+                        total_ingresos = pd.to_numeric(df_v_filtrado["Total_Venta"], errors='coerce').sum()
+                        total_costos_v = pd.to_numeric(df_v_filtrado["Costo_Total"], errors='coerce').sum()
+                        total_ganancias = pd.to_numeric(df_v_filtrado["Ganancia"], errors='coerce').sum()
+
+                        col_m1, col_m2, col_m3 = st.columns(3)
+                        col_m1.metric("💵 Ingresos Totales", f"${total_ingresos:,.2f} MXN")
+                        col_m2.metric("📉 Costo Total de Ventas", f"${total_costos_v:,.2f} MXN")
+                        col_m3.metric("⭐ Ganancia Neta", f"${total_ganancias:,.2f} MXN")
+
+                        st.markdown("---")
+                        st.dataframe(df_v_filtrado, use_container_width=True)
+
+                        csv_ventas = df_v_filtrado.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            label="📥 Descargar Reporte Filtrado en CSV",
+                            data=csv_ventas,
+                            file_name=f"reporte_ventas_{fecha_inicio}_al_{fecha_fin}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+                    else:
+                        st.warning("⚠️ No se encontraron ventas registradas en el rango de fechas seleccionado.")
                 else:
                     st.info("Aún no hay registros de ventas en la base de datos.")
             except Exception as e:
-                st.error(f"Error al leer el registro de ventas desde Turso: {e}")
+                st.error(f"Error al leer o filtrar el registro de ventas: {e}")
 
         with tab_deudas_prov:
             st.markdown("### 📑 Control de Cuentas por Pagar a Proveedores")
