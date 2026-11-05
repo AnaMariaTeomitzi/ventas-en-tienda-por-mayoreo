@@ -29,15 +29,14 @@ def mostrar(acceso_propietaria):
             if tipo == "turso":
                 rs = conn.execute("SELECT * FROM registro_ventas WHERE TRIM(LOWER(Cliente)) = TRIM(LOWER(?));", (cliente_sel,))
                 filas = rs.rows
-                # Extraemos los nombres de las columnas directamente desde Turso para que coincidan al 100%
-                columnas = [desc[0] for desc in rs.description] if rs.description else []
+                # En el SDK de Turso, las columnas se obtienen con rs.columns
+                columnas = rs.columns if hasattr(rs, 'columns') else []
                 df_cliente = pd.DataFrame(filas, columns=columnas) if filas else pd.DataFrame()
             else:
                 query = "SELECT * FROM registro_ventas WHERE TRIM(LOWER(Cliente)) = TRIM(LOWER(?));"
                 df_cliente = pd.read_sql(query, conn, params=(cliente_sel,))
 
             if not df_cliente.empty:
-                # Limpiamos y convertimos a numérico de manera segura buscando las columnas por su nombre real
                 if "Total_Venta" in df_cliente.columns:
                     df_cliente["Total_Venta"] = pd.to_numeric(df_cliente["Total_Venta"], errors='coerce').fillna(0)
                     total_compras = df_cliente["Total_Venta"].sum()
@@ -50,7 +49,7 @@ def mostrar(acceso_propietaria):
                 else:
                     ganancia_total = 0.0
                 
-                # 🎁 CÁLCULO DEL FONDO NAVIDEÑO EN BASE A LA GANANCIA (Ejemplo: 10%)
+                # 🎁 CÁLCULO DEL FONDO NAVIDEÑO EN BASE A LA GANANCIA (10%)
                 porcentaje_navideno = 0.10 
                 fondo_navideno = ganancia_total * porcentaje_navideno
 
