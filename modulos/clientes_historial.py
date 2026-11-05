@@ -7,7 +7,6 @@ def mostrar(acceso_propietaria):
     
     tipo, conn = conectar_db()
     try:
-        # Cargamos los clientes únicos que realmente tienen ventas registradas o están en la base
         if tipo == "turso":
             rs = conn.execute("SELECT DISTINCT Cliente FROM registro_ventas WHERE Cliente IS NOT NULL AND Cliente != '';")
             clientes = [row[0] for row in rs.rows]
@@ -27,28 +26,29 @@ def mostrar(acceso_propietaria):
 
     if cliente_sel:
         try:
-            # Consultamos las ventas aplicando LOWER y TRIM para evitar que falle por mayúsculas o espacios
             if tipo == "turso":
                 rs = conn.execute("SELECT * FROM registro_ventas WHERE TRIM(LOWER(Cliente)) = TRIM(LOWER(?));", (cliente_sel,))
                 filas = rs.rows
-                # Obtenemos los nombres de las columnas de Turso de manera segura
-                columnas = [desc[0] for desc in rs.description] if hasattr(rs, 'description') and rs.description else [
-                    "id", "Fecha", "Sucursal", "Cliente", "SKU", "Producto", "Nivel_Precio", 
-                    "Precio_Unitario", "Cantidad", "Total_Venta", "Costo_Unitario", "Costo_Total", 
-                    "Ganancia", "Metodo_Pago", "Referencia", "Usuario", "Ticket_ID", "Notas"
-                ]
+                # Extraemos los nombres de las columnas directamente desde Turso para que coincidan al 100%
+                columnas = [desc[0] for desc in rs.description] if rs.description else []
                 df_cliente = pd.DataFrame(filas, columns=columnas) if filas else pd.DataFrame()
             else:
                 query = "SELECT * FROM registro_ventas WHERE TRIM(LOWER(Cliente)) = TRIM(LOWER(?));"
                 df_cliente = pd.read_sql(query, conn, params=(cliente_sel,))
 
             if not df_cliente.empty:
-                # Limpiamos y convertimos a numérico para asegurar cálculos correctos
-                df_cliente["Total_Venta"] = pd.to_numeric(df_cliente["Total_Venta"], errors='coerce').fillna(0)
-                df_cliente["Ganancia"] = pd.to_numeric(df_cliente["Ganancia"], errors='coerce').fillna(0)
+                # Limpiamos y convertimos a numérico de manera segura buscando las columnas por su nombre real
+                if "Total_Venta" in df_cliente.columns:
+                    df_cliente["Total_Venta"] = pd.to_numeric(df_cliente["Total_Venta"], errors='coerce').fillna(0)
+                    total_compras = df_cliente["Total_Venta"].sum()
+                else:
+                    total_compras = 0.0
 
-                total_compras = df_cliente["Total_Venta"].sum()
-                ganancia_total = df_cliente["Ganancia"].sum()
+                if "Ganancia" in df_cliente.columns:
+                    df_cliente["Ganancia"] = pd.to_numeric(df_cliente["Ganancia"], errors='coerce').fillna(0)
+                    ganancia_total = df_cliente["Ganancia"].sum()
+                else:
+                    ganancia_total = 0.0
                 
                 # 🎁 CÁLCULO DEL FONDO NAVIDEÑO EN BASE A LA GANANCIA (Ejemplo: 10%)
                 porcentaje_navideno = 0.10 
