@@ -56,19 +56,25 @@ def mostrar(df_catalogo, acceso_propietaria):
                     df_cambios = pd.DataFrame(st.session_state["editor_catalogo"])
                     
                     if not df_cambios.empty:
-                        if busqueda and sku_col in df_final.columns and sku_col in df_cambios.columns:
-                            # Actualizamos fila por fila de forma segura usando el SKU como llave única
-                            for _, row in df_cambios.iterrows():
-                                sku_val = row[sku_col]
-                                mask = df_final[sku_col].astype(str) == str(sku_val)
-                                if mask.any():
-                                    for col in df_cambios.columns:
-                                        df_final.loc[mask, col] = row[col]
-                                else:
-                                    # Si es un producto nuevo agregado con num_rows="dynamic"
-                                    df_final = pd.concat([df_final, pd.DataFrame([row])], ignore_index=True)
+                        if sku_col in df_final.columns and sku_col in df_cambios.columns:
+                            # Aseguramos tipos de datos de SKU como string para evitar fallas de cruce
+                            df_final[sku_col] = df_final[sku_col].astype(str)
+                            df_cambios[sku_col] = df_cambios[sku_col].astype(str)
+
+                            # Actualización limpia usando índices por SKU (evita conflictos de diccionarios)
+                            df_final = df_final.set_index(sku_col)
+                            df_cambios_indexed = df_cambios.set_index(sku_col)
+
+                            # Actualizamos los registros existentes
+                            df_final.update(df_cambios_indexed)
+
+                            # Identificamos y agregamos productos nuevos si se añadieron filas dinámicas
+                            nuevos = df_cambios_indexed[~df_cambios_indexed.index.isin(df_final.index)]
+                            if not nuevos.empty:
+                                df_final = pd.concat([df_final, nuevos])
+
+                            df_final = df_final.reset_index()
                         else:
-                            # Si no hubo búsqueda, el editor tiene la tabla completa
                             df_final = df_cambios.copy()
 
                     registrar_en_historial(df_catalogo)
