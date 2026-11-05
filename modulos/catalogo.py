@@ -51,7 +51,9 @@ def mostrar(df_catalogo, acceso_propietaria):
             if st.button("💾 Guardar Cambios en Catálogo", use_container_width=True):
                 try:
                     df_final = df_catalogo.copy()
-                    df_cambios = st.session_state["editor_catalogo"]
+                    
+                    # CONVERTIMOS EL ESTADO DEL EDITOR A UN DATAFRAME DE PANDAS VÁLIDO
+                    df_cambios = pd.DataFrame(st.session_state["editor_catalogo"])
                     
                     if busqueda and sku_col in df_final.columns:
                         for _, row in df_cambios.iterrows():
