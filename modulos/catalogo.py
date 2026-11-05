@@ -52,30 +52,14 @@ def mostrar(df_catalogo, acceso_propietaria):
                 try:
                     df_final = df_catalogo.copy()
                     
-                    # Convertimos el contenido editado a un DataFrame de Pandas válido
-                    df_cambios = pd.DataFrame(st.session_state["editor_catalogo"])
+                    # Actualizamos directamente utilizando el DataFrame devuelto por el editor 
+                    # y los índices originales preservados por Streamlit.
+                    df_final.update(df_editado)
                     
-                    if not df_cambios.empty:
-                        if sku_col in df_final.columns and sku_col in df_cambios.columns:
-                            # Aseguramos tipos de datos de SKU como string para evitar fallas de cruce
-                            df_final[sku_col] = df_final[sku_col].astype(str)
-                            df_cambios[sku_col] = df_cambios[sku_col].astype(str)
-
-                            # Actualización limpia usando índices por SKU (evita conflictos de diccionarios)
-                            df_final = df_final.set_index(sku_col)
-                            df_cambios_indexed = df_cambios.set_index(sku_col)
-
-                            # Actualizamos los registros existentes
-                            df_final.update(df_cambios_indexed)
-
-                            # Identificamos y agregamos productos nuevos si se añadieron filas dinámicas
-                            nuevos = df_cambios_indexed[~df_cambios_indexed.index.isin(df_final.index)]
-                            if not nuevos.empty:
-                                df_final = pd.concat([df_final, nuevos])
-
-                            df_final = df_final.reset_index()
-                        else:
-                            df_final = df_cambios.copy()
+                    # Si el usuario agregó filas nuevas dinámicamente, las concatenamos al final
+                    filas_nuevas = df_editado.loc[~df_editado.index.isin(df_catalogo.index)]
+                    if not filas_nuevas.empty:
+                        df_final = pd.concat([df_final, filas_nuevas], ignore_index=True)
 
                     registrar_en_historial(df_catalogo)
                     
