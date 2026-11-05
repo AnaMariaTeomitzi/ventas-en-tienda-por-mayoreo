@@ -4,7 +4,7 @@ from datetime import datetime
 import zoneinfo
 import os
 import streamlit.components.v1 as components
-from .base_datos import obtener_clientes_recurrentes_lista, guardar_venta_db, obtener_historial_ventas, VENTAS_FILE
+from .base_datos import obtener_clientes_recurrentes_lista, guardar_venta_db, obtener_historial_ventas, VENTAS_FILE, conectar_db
 
 def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucursal_activa="Tienda Chela"):
     st.title("🛒 Control de Ventas")
@@ -32,7 +32,6 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
 
         if tipo_cliente == "⭐ Cliente Recurrente (Lista)":
             if lista_recurrentes_nombres:
-                # Selectbox nativo con autocompletado y menú desplegable
                 cliente = st.selectbox(
                     "Selecciona el Cliente Recurrente:", 
                     options=lista_recurrentes_nombres,
@@ -270,7 +269,6 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
             if tipo_operacion == "🛒 Venta Confirmada" and metodo_pago == "Efectivo 💵" and monto_recibido < total_general:
                 pago_valido = False
 
-            # Si es VENTA y está fuera de horario (8am-7pm), deshabilita el botón
             boton_habilitado = pago_valido and (horario_permitido or tipo_operacion == "📄 Presupuesto / Cotización")
 
             texto_boton = "✅ Confirmar y Guardar Venta" if tipo_operacion == "🛒 Venta Confirmada" else "📄 Generar Presupuesto"
@@ -322,20 +320,12 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                 
                 exito = True
                 if tipo_operacion == "🛒 Venta Confirmada":
+                    # GUARDADO DIRECTO Y ROBUSTO EN TURSO
                     exito = guardar_venta_db(df_final_venta)
-                    try:
-                        if os.path.exists(VENTAS_FILE):
-                            df_old_ventas = pd.read_csv(VENTAS_FILE)
-                            df_combined_ventas = pd.concat([df_old_ventas, df_final_venta], ignore_index=True)
-                            df_combined_ventas.to_csv(VENTAS_FILE, index=False)
-                        else:
-                            df_final_venta.to_csv(VENTAS_FILE, index=False)
-                    except Exception:
-                        pass
 
                 if exito:
                     if tipo_operacion == "🛒 Venta Confirmada":
-                        st.success(f"⭐ ¡Venta registrada y sincronizada con éxito para '{cliente.strip()}'!")
+                        st.success(f"⭐ ¡Venta registrada y sincronizada con éxito en Turso para '{cliente.strip()}'!")
                     else:
                         st.success(f"📄 ¡Presupuesto generado con éxito para '{cliente.strip()}'!")
                         
@@ -352,7 +342,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                         "referencia": referencia_pago
                     }
                 else:
-                    st.warning("Operación procesada, pero hubo un detalle al sincronizar con la base de datos.")
+                    st.error("Hubo un error al guardar la venta en la base de datos de Turso.")
 
                 st.session_state.carrito = []
                 st.rerun()
@@ -386,14 +376,14 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
             pago_info_html += f"Método: {metodo_pago_str}<br>"
             pago_info_escpos += f"Metodo: {metodo_pago_str}\\n"
             if "Efectivo" in metodo_pago_str:
-                pago_info_html += f"Recibido: ${monto_recibido_val:,.2f}<br>Cambio: ${cambio_val:,.2f}<br>"
-                pago_info_escpos += f"Recibido: ${monto_recibido_val:,.2f}\\nCambio: ${cambio_val:,.2f}\\n"
+                pago_info_html += f"Recibido: ${monto_recibido_val:,.2f}<br>Cambio:${cambio_val:,.2f}<br>"
+                pago_info_escpos += f"Recibido: ${monto_recibido_val:,.2f}\\nCambio:${cambio_val:,.2f}\\n"
 
         items_html = '<br>'.join([f"{itm['Producto']}<br>&nbsp;&nbsp;Cant: {int(itm['Cantidad'])} | Total: ${itm['Total_Venta']:,.2f}" for itm in t['items']])
 
         bluetooth_vta_html = f"""
         <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px solid #ddd; max-width: 320px; font-family: 'Courier New', monospace;">
-            <div style="text-align: center; font-weight: bold; font-size: 14px;">TEXTIL ANIT MARI</div>
+            <div style="text-align: center; font-weight: bold; font-size: 14px;">EL CARMEN</div>
             <div style="text-align: center; font-size: 11px; font-weight: bold;">*** {tipo_op_str.upper()} ***</div>
             <div style="text-align: center; font-size: 11px;">Sucursal: {sucursal_str}</div>
             <div style="text-align: center; font-size: 11px;">{fecha_str}</div>
@@ -459,7 +449,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
 
                 let escpos = "\\x1B\\x40"; // Reset
                 escpos += "\\x1B\\x61\\x01"; // Centrar
-                escpos += "TEXTIL ANIT MARI\\n";
+                escpos += "EL CARMEN\\n";
                 escpos += "*** {tipo_op_str.upper()} ***\\n";
                 escpos += "Sucursal: {sucursal_str}\\n";
                 escpos += "{fecha_str}\\n";
