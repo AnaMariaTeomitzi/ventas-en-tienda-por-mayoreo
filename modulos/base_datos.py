@@ -50,7 +50,16 @@ def inicializar_tablas():
                     Nivel_Precio TEXT,
                     Precio_Unitario REAL,
                     Costo_Unitario REAL,
-                    Cantidad REAL
+                    Cantidad REAL,
+                    Total_Venta REAL,
+                    Costo_Total REAL,
+                    Ganancia REAL,
+                    Fecha_Hora TEXT,
+                    Tipo_Operacion TEXT,
+                    Metodo_Pago TEXT,
+                    Monto_Recibido REAL,
+                    Cambio REAL,
+                    Referencia TEXT
                 );
             """)
             conn.execute("""
@@ -83,7 +92,16 @@ def inicializar_tablas():
                     Nivel_Precio TEXT,
                     Precio_Unitario REAL,
                     Costo_Unitario REAL,
-                    Cantidad REAL
+                    Cantidad REAL,
+                    Total_Venta REAL,
+                    Costo_Total REAL,
+                    Ganancia REAL,
+                    Fecha_Hora TEXT,
+                    Tipo_Operacion TEXT,
+                    Metodo_Pago TEXT,
+                    Monto_Recibido REAL,
+                    Cambio REAL,
+                    Referencia TEXT
                 );
             """)
             cursor.execute("""
@@ -130,8 +148,6 @@ def limpiar_y_preparar_catalogo(df):
 
     num_cols = df.shape[1]
     
-    # Mapeo exacto por posición respetando la primera columna como Producto:
-    # 0: Producto (Concepto) | 1: Costo | 2: Precio Menudeo | 3: Mayoreo 1 | 4: Super Mayoreo
     df_nuevo = pd.DataFrame()
     df_nuevo['SKU'] = [f"P{i+1:03d}" for i in range(len(df))]
     df_nuevo['Producto'] = df.iloc[:, 0].astype(str).str.strip() if num_cols > 0 else ""
@@ -142,7 +158,6 @@ def limpiar_y_preparar_catalogo(df):
     df_nuevo['Precio_Especial'] = df.iloc[:, 5] if num_cols > 5 else 0.0
     df_nuevo['Stock'] = 100
 
-    # Limpieza rigurosa de valores numéricos
     cols_num = ['Costo', 'Precio_Menudeo', 'Precio_Mayoreo_1', 'Precio_Mayoreo_2', 'Precio_Especial']
     for col in cols_num:
         serie = df_nuevo[col]
@@ -208,18 +223,16 @@ def guardar_catalogo_db(input_data):
         else:
             df.to_sql("catalogo_productos", conn, if_exists="replace", index=False)
             
-        # Guardar respaldo CSV local
         df.to_csv(CATALOGO_FILE, index=False)
             
         st.cache_data.clear()
         st.success("¡Catálogo actualizado con éxito!")
-        
-        # Forzar recarga inmediata de la interfaz de Streamlit
         st.rerun()
         return True
     except Exception as e:
         st.error(f"Error al guardar catálogo en la base de datos: {e}")
         return False
+
 def limpiar_columna_numerica(serie):
     if isinstance(serie, pd.DataFrame):
         serie = serie.iloc[:, 0]
@@ -312,7 +325,9 @@ def guardar_venta_db(df_ventas):
         if tipo == "turso":
             for _, row in df_ventas.iterrows():
                 conn.execute(
-                    "INSERT INTO registro_ventas (Fecha, Sucursal, Cliente, SKU, Producto, Nivel_Precio, Precio_Unitario, Costo_Unitario, Cantidad) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                    """INSERT INTO registro_ventas 
+                    (Fecha, Sucursal, Cliente, SKU, Producto, Nivel_Precio, Precio_Unitario, Costo_Unitario, Cantidad, Total_Venta, Costo_Total, Ganancia, Fecha_Hora, Tipo_Operacion, Metodo_Pago, Monto_Recibido, Cambio, Referencia) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);""",
                     (
                         str(row.get("Fecha", "")),
                         str(row.get("Sucursal", "")),
@@ -322,7 +337,16 @@ def guardar_venta_db(df_ventas):
                         str(row.get("Nivel_Precio", "")),
                         float(row.get("Precio_Unitario", 0.0)),
                         float(row.get("Costo_Unitario", 0.0)),
-                        float(row.get("Cantidad", 0.0))
+                        float(row.get("Cantidad", 0.0)),
+                        float(row.get("Total_Venta", 0.0)),
+                        float(row.get("Costo_Total", 0.0)),
+                        float(row.get("Ganancia", 0.0)),
+                        str(row.get("Fecha_Hora", "")),
+                        str(row.get("Tipo_Operacion", "")),
+                        str(row.get("Metodo_Pago", "")),
+                        float(row.get("Monto_Recibido", 0.0)),
+                        float(row.get("Cambio", 0.0)),
+                        str(row.get("Referencia", ""))
                     )
                 )
         else:
@@ -335,7 +359,7 @@ def guardar_venta_db(df_ventas):
 def obtener_historial_ventas():
     tipo, conn = conectar_db()
     try:
-        if tipo == "turso":
+        if tipo == "turso`" if False else tipo == "turso":
             rs = conn.execute("SELECT * FROM registro_ventas;")
             rows = rs.rows
             if not rows:
