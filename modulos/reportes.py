@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import os
-from .base_datos import VENTAS_FILE, COMPRAS_FILE
+from .base_datos import COMPRAS_FILE, obtener_historial_ventas
 
 def mostrar(df_catalogo, acceso_propietaria):
     if not acceso_propietaria:
@@ -18,36 +18,35 @@ def mostrar(df_catalogo, acceso_propietaria):
 
         with tab_ventas:
             st.markdown("### 📈 Historial General de Ventas")
-            if os.path.exists(VENTAS_FILE):
-                try:
-                    df_v = pd.read_csv(VENTAS_FILE)
-                    if not df_v.empty:
-                        total_ingresos = df_v["Total_Venta"].sum()
-                        total_costos_v = df_v["Costo_Total"].sum()
-                        total_ganancias = df_v["Ganancia"].sum()
+            try:
+                # OBTENEMOS EL HISTORIAL DIRECTAMENTE DESDE LA BASE DE DATOS DE TURSO
+                df_v = obtener_historial_ventas()
+                
+                if df_v is not None and not df_v.empty:
+                    total_ingresos = pd.to_numeric(df_v["Total_Venta"], errors='coerce').sum()
+                    total_costos_v = pd.to_numeric(df_v["Costo_Total"], errors='coerce').sum()
+                    total_ganancias = pd.to_numeric(df_v["Ganancia"], errors='coerce').sum()
 
-                        col_m1, col_m2, col_m3 = st.columns(3)
-                        col_m1.metric("💵 Ingresos Totales", f"${total_ingresos:,.2f} MXN")
-                        col_m2.metric("📉 Costo Total de Ventas", f"${total_costos_v:,.2f} MXN")
-                        col_m3.metric("⭐ Ganancia Neta", f"${total_ganancias:,.2f} MXN")
+                    col_m1, col_m2, col_m3 = st.columns(3)
+                    col_m1.metric("💵 Ingresos Totales", f"${total_ingresos:,.2f} MXN")
+                    col_m2.metric("📉 Costo Total de Ventas", f"${total_costos_v:,.2f} MXN")
+                    col_m3.metric("⭐ Ganancia Neta", f"${total_ganancias:,.2f} MXN")
 
-                        st.markdown("---")
-                        st.dataframe(df_v, use_container_width=True)
+                    st.markdown("---")
+                    st.dataframe(df_v, use_container_width=True)
 
-                        csv_ventas = df_v.to_csv(index=False).encode('utf-8')
-                        st.download_button(
-                            label="📥 Descargar Reporte de Ventas en CSV",
-                            data=csv_ventas,
-                            file_name=f"reporte_ventas_{datetime.now().strftime('%Y%m%d')}.csv",
-                            mime="text/csv",
-                            use_container_width=True
-                        )
-                    else:
-                        st.info("Aún no hay registros en el archivo de ventas.")
-                except Exception as e:
-                    st.error(f"Error al leer el registro de ventas: {e}")
-            else:
-                st.info("No hay transacciones registradas todavía.")
+                    csv_ventas = df_v.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label="📥 Descargar Reporte de Ventas en CSV",
+                        data=csv_ventas,
+                        file_name=f"reporte_ventas_{datetime.now().strftime('%Y%m%d')}.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+                else:
+                    st.info("Aún no hay registros de ventas en la base de datos.")
+            except Exception as e:
+                st.error(f"Error al leer el registro de ventas desde Turso: {e}")
 
         with tab_deudas_prov:
             st.markdown("### 📑 Control de Cuentas por Pagar a Proveedores")
