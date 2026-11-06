@@ -46,7 +46,8 @@ def mostrar():
 
     tab1, tab2, tab3 = st.tabs(["📋 Listado de Usuarios", "➕ Dar de Alta", "⚙️ Modificar / Eliminar / Estado"])
 
-    SUCURSALES = ["Tienda Chela", "Tienda Santa Ana", "Tienda Ixcotla"]
+    # --- SUCURSALES ACTUALIZADAS ---
+    SUCURSALES = ["Tienda Ixcotla", "Tienda Santa Ana", "Textilanit Mari", "Textiles Ruiz"]
 
     # --- TAB 1: LISTADO ---
     with tab1:
