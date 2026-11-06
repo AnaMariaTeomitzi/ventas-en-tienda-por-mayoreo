@@ -72,10 +72,10 @@ def mostrar():
 
             estado.innerText = "Enviando prueba ESC/POS a MTP-2...";
 
-            // Comandos ESC/POS específicos para MTP-2
+            // Comandos ESC/POS específicos para MTP-2 con el nombre actualizado
             let escpos = "\\x1B\\x40"; // Reset
             escpos += "\\x1B\\x61\\x01"; // Centrar
-            escpos += "TEXTIL ANIT MARI\\n";
+            escpos += "TEXTILES CONCEPCION\\n"; // <--- Actualizado aquí
             escpos += "Sucursal: Activa\\n";
             escpos += "--------------------------------\\n";
             escpos += "\\x1B\\x61\\x00"; // Izquierda
