@@ -383,7 +383,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
 
         bluetooth_vta_html = f"""
         <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px solid #ddd; max-width: 320px; font-family: 'Courier New', monospace;">
-            <div style="text-align: center; font-weight: bold; font-size: 14px;">EL CARMEN</div>
+            <div style="text-align: center; font-weight: bold; font-size: 14px;">TEXTILES CONCEPCIÓN</div>
             <div style="text-align: center; font-size: 11px; font-weight: bold;">*** {tipo_op_str.upper()} ***</div>
             <div style="text-align: center; font-size: 11px;">Sucursal: {sucursal_str}</div>
             <div style="text-align: center; font-size: 11px;">{fecha_str}</div>
