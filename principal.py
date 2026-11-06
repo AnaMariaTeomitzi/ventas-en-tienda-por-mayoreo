@@ -8,7 +8,7 @@ from modulos.usuarios_db import inicializar_usuario_admin_por_defecto, verificar
 # Importar módulos de secciones (incluyendo config_impresora)
 from modulos import catalogo, ventas, devoluciones, compras, reportes, clientes_historial, clientes_recurrentes, gestion_usuarios, config_impresora
 
-st.set_page_config(page_title="Sistema de Ventas - Textil", layout="wide")
+st.set_page_config(page_title="Sistema de Ventas - Textiles Concepcion", layout="wide")
 
 # Asegurar usuario admin inicial
 inicializar_usuario_admin_por_defecto()
@@ -22,7 +22,7 @@ if "autenticado" not in st.session_state:
 
 # --- PANTALLA DE ACCESO (SI NO HA INICIADO SESIÓN) ---
 if not st.session_state.autenticado:
-    st.title("🔒 Sistema de Control Textil")
+    st.title("🔒 Textiles Concepcion - Control Textil")
     st.subheader("Acceso Restringido a Personal Autorizado")
     
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -45,7 +45,6 @@ if not st.session_state.autenticado:
                 else:
                     st.error("Usuario, contraseña incorrectos o cuenta desactivada.")
     
-    # Detenemos la ejecución aquí para que nadie vea nada más
     st.stop()
 
 # =========================================================================
@@ -70,8 +69,8 @@ if st.sidebar.button("🚪 Cerrar Sesión", type="secondary"):
 
 st.sidebar.divider()
 
-# Selector de sucursal activa para la operación
-SUCURSALES_DISPONIBLES = ["Tienda Chela", "Tienda Santa Ana", "Tienda Ixcotla"]
+# --- NUEVAS SUCURSALES ACTUALIZADAS ---
+SUCURSALES_DISPONIBLES = ["Tienda Ixcotla", "Tienda Santa Ana", "Textilanit Mari", "Textiles Ruiz"]
 
 if acceso_propietaria:
     st.sidebar.subheader("🏪 Sucursal Activa (Dueña)")
@@ -89,8 +88,8 @@ if acceso_propietaria:
         "⚙️ Configuración Impresora"
     ]
 else:
-    # Si es empleado, opera estrictamente en su sucursal asignada
-    sucursal_activa = sucursal_usuario if sucursal_usuario in SUCURSALES_DISPONIBLES else "Tienda Chela"
+    # Si es empleado, opera estrictamente en su sucursal asignada por defecto a Tienda Ixcotla si no coincide
+    sucursal_activa = sucursal_usuario if sucursal_usuario in SUCURSALES_DISPONIBLES else "Tienda Ixcotla"
     st.sidebar.info(f"📍 Operando en: **{sucursal_activa}**")
     
     opciones_disponibles = [
