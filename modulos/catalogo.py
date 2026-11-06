@@ -46,7 +46,6 @@ def mostrar(df_catalogo, acceso_propietaria):
                 st.markdown("---")
                 st.warning(f"⚠️ **Modo de Advertencia de Precios:** Has seleccionado un producto específico (`{busqueda}`). Revisa y ajusta sus precios individualmente si deseas aplicar cambios controlados:")
                 
-                # Selector del producto exacto entre los filtrados
                 opciones_prod = df_filtrado[sku_col].astype(str) + " - " + df_filtrado[prod_col].astype(str)
                 prod_elegido_str = st.selectbox("Selecciona el producto a auditar/modificar:", opciones_prod)
                 
@@ -107,19 +106,13 @@ def mostrar(df_catalogo, acceso_propietaria):
             if st.button("💾 Guardar Cambios Generales en Catálogo", use_container_width=True):
                 try:
                     df_final = df_catalogo.copy()
-                    
-                    # Fusionamos los cambios de forma segura sobre el catálogo completo usando el índice original
                     df_final.update(df_editado)
                     
-                    # Si se agregaron filas nuevas con num_rows="dynamic"
                     filas_nuevas = df_editado.loc[~df_editado.index.isin(df_catalogo.index)]
                     if not filas_nuevas.empty:
                         df_final = pd.concat([df_final, filas_nuevas], ignore_index=True)
 
-                    # Registramos la versión anterior en el historial antes de sobrescribir
                     registrar_en_historial(df_catalogo)
-                    
-                    # --- SINCRONIZACIÓN DIRECTA CON TURSO Y CSV ---
                     guardar_catalogo_db(df_final)
                     st.cache_data.clear()
                     
@@ -136,12 +129,10 @@ def mostrar(df_catalogo, acceso_propietaria):
             if archivo_subido is not None:
                 try:
                     registrar_en_historial(df_catalogo)
-                    
                     df_crudo = leer_archivo_catalogo(archivo_subido)
                     
                     if df_crudo is not None and not df_crudo.empty:
                         df_limpio = limpiar_y_preparar_catalogo(df_crudo)
-                        
                         guardar_catalogo_db(df_limpio)
                         st.cache_data.clear()
                         
@@ -174,7 +165,6 @@ def mostrar(df_catalogo, acceso_propietaria):
                                 registrar_en_historial(df_catalogo)
                                 cols_base = [c for c in df_respaldo_sel.columns if c != "Fecha_Actualizacion"]
                                 df_restaurado = df_respaldo_sel[cols_base].copy()
-                                
                                 guardar_catalogo_db(df_restaurado)
 
                                 st.success(f"¡Catálogo restaurado exitosamente a la versión de {fecha_sel}!")
@@ -189,6 +179,27 @@ def mostrar(df_catalogo, acceso_propietaria):
                 st.info("No hay historial de respaldos disponible aún.")
 
     else:
-        st.markdown("### 📋 Vista Actual del Catálogo")
+        st.markdown("### 📋 Vista Actual del Catálogo y Consulta Rápida")
         columnas_empleado = [col for col in df_filtrado.columns if col.lower() not in ["costo", "costo_unitario", "unnamed: 0"]]
+        
+        # --- CONSULTA RÁPIDA DE PRECIOS PARA EMPLEADOS ---
+        if busqueda and not df_filtrado.empty:
+            st.markdown("---")
+            st.info(f"🔍 **Consulta Rápida de Precios para la búsqueda:** `{busqueda}`")
+            
+            opciones_prod_emp = df_filtrado[sku_col].astype(str) + " - " + df_filtrado[prod_col].astype(str)
+            prod_sel_emp = st.selectbox("Selecciona un producto para ver sus niveles de precio detallados:", opciones_prod_emp, key="sel_emp_prod")
+            
+            if prod_sel_emp:
+                sku_emp = prod_sel_emp.split(" - ")[0]
+                row_emp = df_filtrado[df_filtrado[sku_col].astype(str) == sku_emp].iloc[0]
+                
+                st.markdown(f"#### 🏷️ Producto: **{row_emp.get(prod_col)}** (SKU: `{sku_emp}`)")
+                col_e1, col_e2, col_e3, col_e4 = st.columns(4)
+                col_e1.metric("💵 Menudeo", f"${float(row_emp.get('Precio_Menudeo', 0.0)):,.2f}")
+                col_e2.metric("⭐ Mayoreo 1", f"${float(row_emp.get('Precio_Mayoreo_1', 0.0)):,.2f}")
+                col_e3.metric("⭐ Mayoreo 2", f"${float(row_emp.get('Precio_Mayoreo_2', 0.0)):,.2f}")
+                col_e4.metric("🌟 Especial", f"${float(row_emp.get('Precio_Especial', 0.0)):,.2f}")
+            st.markdown("---")
+
         st.dataframe(df_filtrado[columnas_empleado], use_container_width=True)
