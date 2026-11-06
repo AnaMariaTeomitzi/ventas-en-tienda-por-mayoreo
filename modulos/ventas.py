@@ -417,7 +417,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
             <div style="text-align: center; margin: 10px 0;">
                 <p style="font-size: 10px; margin-bottom: 4px;">Escanea para visitar nuestra web:</p>
                 <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://textilanitmari.com" alt="QR Web" style="width: 100px; height: 100px;" />
-                <p style="font-size: 10px; font-weight: bold; margin-top: 4px;">textilanitmari.com</p>
+                <p style="font-size: 10px; font-weight: bold; margin-top: 4px;">www.textilanitmari.com</p>
             </div>
 
             <div style="text-align: center; font-size: 10px;">¡Gracias por su preferencia!</div>
