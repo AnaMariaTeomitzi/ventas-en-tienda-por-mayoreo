@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
-from .base_datos import CATALOGO_FILE, HISTORIAL_COSTOS_FILE, limpiar_y_preparar_catalogo, registrar_en_historial, guardar_catalogo_db, leer_archivo_catalogo, conectar_db
+from .base_datos import CATALOGO_FILE, HISTORIAL_COSTOS_FILE, limpiar_y_preparar_catalogo, registrar_en_historial, leer_archivo_catalogo, conectar_db
 
 def mostrar(df_catalogo, acceso_propietaria):
     # --- ESTILO EJECUTIVO Y CORPORATIVO ---
@@ -14,13 +14,6 @@ def mostrar(df_catalogo, acceso_propietaria):
         .stButton button {
             border-radius: 6px;
             font-weight: 600;
-        }
-        .metric-card {
-            background-color: #f8f9fa;
-            border: 1px solid #e9ecef;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
         }
         </style>
     """, unsafe_allow_html=True)
@@ -115,15 +108,25 @@ def mostrar(df_catalogo, acceso_propietaria):
                                 df_catalogo.at[idx_original, "Precio_Mayoreo_2"] = nv_m2
                                 df_catalogo.at[idx_original, "Precio_Especial"] = nv_esp
                                 
-                                # Guardar de forma robusta en Turso y CSV
-                                guardar_catalogo_db(df_catalogo)
+                                # --- SINCRONIZACIÓN DIRECTA TURSO Y CSV ---
+                                tipo, conn = conectar_db()
+                                if tipo == "turso":
+                                    conn.execute("DELETE FROM catalogo_productos;")
+                                    for _, r in df_catalogo.iterrows():
+                                        conn.execute(
+                                            "INSERT OR REPLACE INTO catalogo_productos (SKU, Producto, Costo, Precio_Menudeo, Precio_Mayoreo_1, Precio_Mayoreo_2, Precio_Especial, Stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
+                                            (str(r.get("SKU", "")), str(r.get("Producto", "")), float(r.get("Costo", 0)), float(r.get("Precio_Menudeo", 0)), float(r.get("Precio_Mayoreo_1", 0)), float(r.get("Precio_Mayoreo_2", 0)), float(r.get("Precio_Especial", 0)), int(r.get("Stock", 100)))
+                                        )
+                                else:
+                                    df_catalogo.to_sql("catalogo_productos", conn, if_exists="replace", index=False)
+                                
+                                df_catalogo.to_csv(CATALOGO_FILE, index=False)
                                 st.cache_data.clear()
                                 
-                                # Asignar mensaje persistente en session_state
-                                st.session_state.mensaje_exito = f"✅ ¡Actualización exitosa! El producto '{row_prod.get('Producto')}' fue guardado correctamente (Menudeo: ${nv_men:,.2f} | Mayoreo 1: ${nv_m1:,.2f})."
+                                st.session_state.mensaje_exito = f"✅ ¡Actualización exitosa en Turso! Producto: '{row_prod.get('Producto')}' | Menudeo: ${nv_men:,.2f} | Mayoreo 1: ${nv_m1:,.2f}."
                                 st.rerun()
                             except Exception as e:
-                                st.error(f"Error al actualizar el producto: {e}")
+                                st.error(f"Error al actualizar el producto en Turso: {e}")
                         
                         if dejar_igual:
                             st.info("ℹ️ Se mantuvieron los precios originales sin alteraciones.")
@@ -149,13 +152,26 @@ def mostrar(df_catalogo, acceso_propietaria):
                         df_final = pd.concat([df_final, filas_nuevas], ignore_index=True)
 
                     registrar_en_historial(df_catalogo)
-                    guardar_catalogo_db(df_final)
+                    
+                    # --- SINCRONIZACIÓN DIRECTA GENERAL TURSO Y CSV ---
+                    tipo, conn = conectar_db()
+                    if tipo == "turso":
+                        conn.execute("DELETE FROM catalogo_productos;")
+                        for _, r in df_final.iterrows():
+                            conn.execute(
+                                "INSERT OR REPLACE INTO catalogo_productos (SKU, Producto, Costo, Precio_Menudeo, Precio_Mayoreo_1, Precio_Mayoreo_2, Precio_Especial, Stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
+                                (str(r.get("SKU", "")), str(r.get("Producto", "")), float(r.get("Costo", 0)), float(r.get("Precio_Menudeo", 0)), float(r.get("Precio_Mayoreo_1", 0)), float(r.get("Precio_Mayoreo_2", 0)), float(r.get("Precio_Especial", 0)), int(r.get("Stock", 100)))
+                            )
+                    else:
+                        df_final.to_sql("catalogo_productos", conn, if_exists="replace", index=False)
+                    
+                    df_final.to_csv(CATALOGO_FILE, index=False)
                     st.cache_data.clear()
                     
-                    st.session_state.mensaje_exito = "✅ ¡Matriz de catálogo general guardada, sincronizada en Turso y actualizada con éxito!"
+                    st.session_state.mensaje_exito = "✅ ¡Matriz general guardada, sincronizada en Turso y actualizada con éxito!"
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Error al guardar los cambios generales: {e}")
+                    st.error(f"Error al guardar los cambios generales en Turso: {e}")
 
         with tab_subir:
             st.markdown("### 📤 Carga Masiva de Catálogo (Excel / CSV)")
@@ -169,10 +185,22 @@ def mostrar(df_catalogo, acceso_propietaria):
                     
                     if df_crudo is not None and not df_crudo.empty:
                         df_limpio = limpiar_y_preparar_catalogo(df_crudo)
-                        guardar_catalogo_db(df_limpio)
+                        
+                        tipo, conn = conectar_db()
+                        if tipo == "turso":
+                            conn.execute("DELETE FROM catalogo_productos;")
+                            for _, r in df_limpio.iterrows():
+                                conn.execute(
+                                    "INSERT OR REPLACE INTO catalogo_productos (SKU, Producto, Costo, Precio_Menudeo, Precio_Mayoreo_1, Precio_Mayoreo_2, Precio_Especial, Stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
+                                    (str(r.get("SKU", "")), str(r.get("Producto", "")), float(r.get("Costo", 0)), float(r.get("Precio_Menudeo", 0)), float(r.get("Precio_Mayoreo_1", 0)), float(r.get("Precio_Mayoreo_2", 0)), float(r.get("Precio_Especial", 0)), int(r.get("Stock", 100)))
+                                )
+                        else:
+                            df_limpio.to_sql("catalogo_productos", conn, if_exists="replace", index=False)
+                        
+                        df_limpio.to_csv(CATALOGO_FILE, index=False)
                         st.cache_data.clear()
                         
-                        st.session_state.mensaje_exito = "✅ ¡Catálogo masivo importado y sincronizado correctamente en el sistema!"
+                        st.session_state.mensaje_exito = "✅ ¡Catálogo masivo importado y sincronizado en Turso correctamente!"
                         st.rerun()
                     else:
                         st.error("El archivo proporcionado está vacío o presenta un formato incompatible.")
@@ -201,9 +229,22 @@ def mostrar(df_catalogo, acceso_propietaria):
                                 registrar_en_historial(df_catalogo)
                                 cols_base = [c for c in df_respaldo_sel.columns if c != "Fecha_Actualizacion"]
                                 df_restaurado = df_respaldo_sel[cols_base].copy()
-                                guardar_catalogo_db(df_restaurado)
+                                
+                                tipo, conn = conectar_db()
+                                if tipo == "turso":
+                                    conn.execute("DELETE FROM catalogo_productos;")
+                                    for _, r in df_restaurado.iterrows():
+                                        conn.execute(
+                                            "INSERT OR REPLACE INTO catalogo_productos (SKU, Producto, Costo, Precio_Menudeo, Precio_Mayoreo_1, Precio_Mayoreo_2, Precio_Especial, Stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
+                                            (str(r.get("SKU", "")), str(r.get("Producto", "")), float(r.get("Costo", 0)), float(r.get("Precio_Menudeo", 0)), float(r.get("Precio_Mayoreo_1", 0)), float(r.get("Precio_Mayoreo_2", 0)), float(r.get("Precio_Especial", 0)), int(r.get("Stock", 100)))
+                                        )
+                                else:
+                                    df_restaurado.to_sql("catalogo_productos", conn, if_exists="replace", index=False)
+                                
+                                df_restaurado.to_csv(CATALOGO_FILE, index=False)
+                                st.cache_data.clear()
 
-                                st.session_state.mensaje_exito = f"✅ ¡Catálogo revertido con éxito a la versión del {fecha_sel}!"
+                                st.session_state.mensaje_exito = f"✅ ¡Catálogo revertido y sincronizado en Turso a la versión del {fecha_sel}!"
                                 st.rerun()
                         else:
                             st.info("No existen respaldos previos registrados en el historial.")
