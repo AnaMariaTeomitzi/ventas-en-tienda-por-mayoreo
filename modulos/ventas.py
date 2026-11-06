@@ -9,6 +9,9 @@ from .base_datos import obtener_clientes_recurrentes_lista, guardar_venta_db, ob
 def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucursal_activa="Tienda Chela"):
     st.title("🛒 Control de Ventas")
 
+    # --- OBTENER USUARIO LOGueado EN SESIÓN ---
+    usuario_actual = st.session_state.get("username", st.session_state.get("usuario", "Mostrador"))
+
     # --- VALIDACIÓN DE HORARIO EN ZONA HORARIA DE MÉXICO ---
     zona_mx = zoneinfo.ZoneInfo("America/Mexico_City")
     ahora_actual = datetime.now(zona_mx)
@@ -313,7 +316,8 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                         "Metodo_Pago": metodo_pago,
                         "Monto_Recibido": float(monto_recibido),
                         "Cambio": float(cambio),
-                        "Referencia": referencia_pago
+                        "Referencia": referencia_pago,
+                        "Atendido_Por": usuario_actual
                     })
 
                 df_final_venta = pd.DataFrame(items_finales)
@@ -332,6 +336,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                         "tipo_operacion": tipo_operacion,
                         "cliente": cliente.strip(),
                         "sucursal": sucursal_activa,
+                        "atendido_por": usuario_actual,
                         "fecha": ahora.strftime("%Y-%m-%d %H:%M:%S"),
                         "items": items_finales,
                         "total": total_general,
@@ -361,6 +366,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
             lineas_js += f'escpos += "  Cant: {int(itm["Cantidad"])} | Total: ${itm["Total_Venta"]:,.2f}\\n";\n'
 
         sucursal_str = str(t['sucursal'])
+        atendido_str = str(t.get('atendido_por', usuario_actual))
         fecha_str = str(t['fecha'])
         cliente_str = str(t['cliente'])
         total_str = f"${t['total']:,.2f}"
@@ -385,6 +391,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
             <div style="text-align: center; font-weight: bold; font-size: 14px;">TEXTILES CONCEPCION</div>
             <div style="text-align: center; font-size: 11px; font-weight: bold;">*** {tipo_op_str.upper()} ***</div>
             <div style="text-align: center; font-size: 11px;">Sucursal: {sucursal_str}</div>
+            <div style="text-align: center; font-size: 11px;">Atendió: {atendido_str}</div>
             <div style="text-align: center; font-size: 11px;">{fecha_str}</div>
             <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
             <div style="font-size: 11px;">Cliente: {cliente_str}</div>
@@ -459,6 +466,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                 escpos += "TEXTILES CONCEPCION\\n";
                 escpos += "*** {tipo_op_str.upper()} ***\\n";
                 escpos += "Sucursal: {sucursal_str}\\n";
+                escpos += "Atendio: {atendido_str}\\n";
                 escpos += "{fecha_str}\\n";
                 escpos += "--------------------------------\\n";
                 escpos += "\\x1B\\x61\\x00"; // Izquierda
@@ -488,7 +496,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
         }}
         </script>
         """
-        components.html(bluetooth_vta_html, height=580)
+        components.html(bluetooth_vta_html, height=600)
         
         if st.button("✖️ Cerrar Vista y Nuevo Ticket"):
             del st.session_state.ultimo_ticket
