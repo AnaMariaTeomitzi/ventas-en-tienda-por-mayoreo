@@ -320,7 +320,6 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                 
                 exito = True
                 if tipo_operacion == "🛒 Venta Confirmada":
-                    # GUARDADO DIRECTO Y ROBUSTO EN TURSO
                     exito = guardar_venta_db(df_final_venta)
 
                 if exito:
@@ -383,7 +382,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
 
         bluetooth_vta_html = f"""
         <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px solid #ddd; max-width: 320px; font-family: 'Courier New', monospace;">
-            <div style="text-align: center; font-weight: bold; font-size: 14px;">TEXTILES CONCEPCIÓN</div>
+            <div style="text-align: center; font-weight: bold; font-size: 14px;">TEXTILES CONCEPCION</div>
             <div style="text-align: center; font-size: 11px; font-weight: bold;">*** {tipo_op_str.upper()} ***</div>
             <div style="text-align: center; font-size: 11px;">Sucursal: {sucursal_str}</div>
             <div style="text-align: center; font-size: 11px;">{fecha_str}</div>
@@ -400,6 +399,14 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
             <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
             <div style="text-align: right; font-weight: bold; font-size: 13px;">TOTAL: {total_str}</div>
             <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
+            
+            <!-- Vista previa del código QR con textilanitmari.com -->
+            <div style="text-align: center; margin: 10px 0;">
+                <p style="font-size: 10px; margin-bottom: 4px;">Escanea para visitar nuestra web:</p>
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://textilanitmari.com" alt="QR Web" style="width: 100px; height: 100px;" />
+                <p style="font-size: 10px; font-weight: bold; margin-top: 4px;">textilanitmari.com</p>
+            </div>
+
             <div style="text-align: center; font-size: 10px;">¡Gracias por su preferencia!</div>
             
             <br>
@@ -449,7 +456,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
 
                 let escpos = "\\x1B\\x40"; // Reset
                 escpos += "\\x1B\\x61\\x01"; // Centrar
-                escpos += "EL CARMEN\\n";
+                escpos += "TEXTILES CONCEPCION\\n";
                 escpos += "*** {tipo_op_str.upper()} ***\\n";
                 escpos += "Sucursal: {sucursal_str}\\n";
                 escpos += "{fecha_str}\\n";
@@ -465,7 +472,10 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                 escpos += "--------------------------------\\n";
                 escpos += "\\x1B\\x61\\x02"; // Derecha
                 escpos += "TOTAL: {total_str}\\n\\n";
+                
                 escpos += "\\x1B\\x61\\x01"; // Centrar
+                escpos += "Visita nuestra web:\\n";
+                escpos += "textilanitmari.com\\n";
                 escpos += "¡Gracias por su preferencia!\\n\\n\\n";
 
                 const encoder = new TextEncoder();
@@ -478,7 +488,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
         }}
         </script>
         """
-        components.html(bluetooth_vta_html, height=450)
+        components.html(bluetooth_vta_html, height=580)
         
         if st.button("✖️ Cerrar Vista y Nuevo Ticket"):
             del st.session_state.ultimo_ticket
