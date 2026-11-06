@@ -70,7 +70,7 @@ if st.sidebar.button("🚪 Cerrar Sesión", type="secondary"):
 st.sidebar.divider()
 
 # --- NUEVAS SUCURSALES ACTUALIZADAS ---
-SUCURSALES_DISPONIBLES = ["Tienda Ixcotla", "Tienda Santa Ana", "Textilanit Mari", "Textiles Ruiz"]
+SUCURSALES_DISPONIBLES = ["Tienda Ixcotla", "Tienda Santa Ana", "Textil Anita Maria", "Textiles Ruiz"]
 
 if acceso_propietaria:
     st.sidebar.subheader("🏪 Sucursal Activa (Dueña)")
