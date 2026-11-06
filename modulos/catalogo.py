@@ -86,7 +86,10 @@ def mostrar(df_catalogo, acceso_propietaria):
                                 
                                 guardar_catalogo_db(df_catalogo)
                                 st.cache_data.clear()
-                                st.success(f"✅ ¡Precios actualizados exitosamente para '{row_prod.get('Producto')}'!")
+                                
+                                # MENSAJE DE CONFIRMACIÓN DETALLADO
+                                st.success(f"✅ ¡Guardado con éxito! Producto: '{row_prod.get('Producto')}' | Menudeo: ${nv_men:,.2f} | Mayoreo 1: ${nv_m1:,.2f}")
+                                st.toast("¡Datos del producto actualizados y sincronizados correctamente!", icon="💾")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error al actualizar el producto: {e}")
@@ -116,7 +119,8 @@ def mostrar(df_catalogo, acceso_propietaria):
                     guardar_catalogo_db(df_final)
                     st.cache_data.clear()
                     
-                    st.success("¡Precios y catálogo actualizados con éxito en Turso y el sistema!")
+                    st.success("✅ ¡Catálogo general actualizado y guardado correctamente en Turso y el sistema!")
+                    st.toast("¡Cambios generales guardados con éxito!", icon="💾")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error al guardar los cambios: {e}")
@@ -136,7 +140,8 @@ def mostrar(df_catalogo, acceso_propietaria):
                         guardar_catalogo_db(df_limpio)
                         st.cache_data.clear()
                         
-                        st.success("¡Catálogo cargado y actualizado correctamente en el sistema!")
+                        st.success("✅ ¡Catálogo cargado y guardado correctamente en el sistema!")
+                        st.toast("¡Archivo importado con éxito!", icon="📂")
                         st.rerun()
                     else:
                         st.error("El archivo está vacío o no se pudo leer.")
@@ -167,7 +172,8 @@ def mostrar(df_catalogo, acceso_propietaria):
                                 df_restaurado = df_respaldo_sel[cols_base].copy()
                                 guardar_catalogo_db(df_restaurado)
 
-                                st.success(f"¡Catálogo restaurado exitosamente a la versión de {fecha_sel}!")
+                                st.success(f"✅ ¡Catálogo restaurado exitosamente a la versión de {fecha_sel}!")
+                                st.toast("¡Versión restaurada con éxito!", icon="⏪")
                                 st.rerun()
                         else:
                             st.info("Aún no hay puntos de restauración guardados en el historial.")
