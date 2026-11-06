@@ -44,7 +44,7 @@ def mostrar():
     inicializar_tabla_usuarios()
     tipo, conn = conectar_db()
 
-    tab1, tab2, tab3 = st.tabs(["📋 Listado de Usuarios", "➕ Dar de Alta", "⚙️ Modificar / Eliminar / Estado"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📋 Listado de Usuarios", "➕ Dar de Alta", "⚙️ Modificar / Eliminar / Estado", "🔄 Reinicio Anual"])
 
     # --- SUCURSALES ACTUALIZADAS ---
     SUCURSALES = ["Tienda Ixcotla", "Tienda Santa Ana", "Textil Anita Maria", "Textiles Ruiz"]
@@ -225,3 +225,33 @@ def mostrar():
                 st.info("No hay usuarios registrados.")
         except Exception as e:
             st.error(f"Error en gestión avanzada: {e}")
+
+    # --- TAB 4: REINICIO ANUAL DE VENTAS ---
+    with tab4:
+        st.subheader("⚠️ Zona de Peligro: Reinicio Anual de Ventas")
+        st.warning("Esta acción eliminará **todo el historial de ventas registrado**, dejando la aplicación en 0 ventas para el nuevo periodo. **Asegúrate de exportar tus reportes a Excel antes de continuar.**")
+
+        confirmar_reinicio = st.checkbox("Confirmo que ya respaldé mi información y deseo borrar todo el historial de ventas de la base de datos", key="chk_reinicio_ventas")
+
+        if confirmar_reinicio:
+            if st.button("🗑️ Vaciar Historial de Ventas (Dejar en 0)", type="primary"):
+                try:
+                    if tipo == "turso":
+                        conn.execute("DELETE FROM registro_ventas;")
+                        try:
+                            conn.execute("DELETE FROM sqlite_sequence WHERE name='registro_ventas';")
+                        except:
+                            pass
+                    else:
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM registro_ventas;")
+                        try:
+                            cursor.execute("DELETE FROM sqlite_sequence WHERE name='registro_ventas';")
+                        except:
+                            pass
+                        conn.commit()
+                    
+                    st.success("✅ ¡El historial de ventas se ha borrado con éxito! La aplicación ha quedado limpia en 0 ventas.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error al intentar vaciar la base de datos de ventas: {e}")
