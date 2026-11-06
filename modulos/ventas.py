@@ -407,6 +407,12 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
             <div style="text-align: right; font-weight: bold; font-size: 13px;">TOTAL: {total_str}</div>
             <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
             
+            <!-- Datos de contacto y horario -->
+            <div style="text-align: center; font-size: 11px; margin: 8px 0;">
+                <b>Tel: 246 757 61 27</b><br>
+                Horario: 11:00 am a 7:00 pm
+            </div>
+            
             <!-- Vista previa del código QR con textilanitmari.com -->
             <div style="text-align: center; margin: 10px 0;">
                 <p style="font-size: 10px; margin-bottom: 4px;">Escanea para visitar nuestra web:</p>
@@ -482,6 +488,8 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                 escpos += "TOTAL: {total_str}\\n\\n";
                 
                 escpos += "\\x1B\\x61\\x01"; // Centrar
+                escpos += "Tel: 246 757 61 27\\n";
+                escpos += "Horario: 11:00 am a 7:00 pm\\n";
                 escpos += "Visita nuestra web:\\n";
                 escpos += "textilanitmari.com\\n";
                 escpos += "¡Gracias por su preferencia!\\n\\n\\n";
@@ -496,7 +504,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
         }}
         </script>
         """
-        components.html(bluetooth_vta_html, height=600)
+        components.html(bluetooth_vta_html, height=620)
         
         if st.button("✖️ Cerrar Vista y Nuevo Ticket"):
             del st.session_state.ultimo_ticket
