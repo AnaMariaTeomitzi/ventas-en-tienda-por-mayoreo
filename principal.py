@@ -88,7 +88,7 @@ if acceso_propietaria:
         "⚙️ Configuración Impresora"
     ]
 else:
-    # Si es empleado, opera estrictamente en su sucursal asignada por defecto a Tienda Ixcotla si no coincide
+    # Si es empleado, opera estrictamente en su sucursal asignada
     sucursal_activa = sucursal_usuario if sucursal_usuario in SUCURSALES_DISPONIBLES else "Tienda Ixcotla"
     st.sidebar.info(f"📍 Operando en: **{sucursal_activa}**")
     
