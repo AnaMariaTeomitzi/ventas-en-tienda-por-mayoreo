@@ -14,12 +14,10 @@ def obtener_siguiente_folio(anio_actual):
     try:
         df_hist = obtener_historial_ventas()
         if not df_hist.empty and "Numero_Ticket" in df_hist.columns:
-            # Filtrar los tickets que comiencen con el año actual
             prefijo_anio = f"TCK-{anio_actual}-"
             tickets_anio = df_hist[df_hist["Numero_Ticket"].astype(str).str.startswith(prefijo_anio)]
             
             if not tickets_anio.empty:
-                # Extraer el número consecutivo final de cada ticket
                 consecutivos = []
                 for t in tickets_anio["Numero_Ticket"].astype(str):
                     partes = t.split("-")
@@ -44,7 +42,6 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
     hora_actual = ahora_actual.hour  # 0 a 23 hrs
     anio_actual = ahora_actual.year
 
-    # Permitir ventas únicamente entre las 8:00 (8) y las 19:00 (19) hora de México
     horario_permitido = 8 <= hora_actual < 19
 
     if not horario_permitido:
@@ -228,7 +225,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
         st.markdown("---")
         st.markdown(f"### 💰 **Total a Pagar / Cotizar:** `${total_general:,.2f} MXN`")
 
-        # --- MOSTRAR FOLIO AUTOMÁTICO (EDITABLE SI SE DESEA CORREGIR) ---
+        # --- CAMPO NÚMERO DE TICKET AUTOMÁTICO ---
         st.markdown("### 🔢 Folio de Ticket")
         numero_ticket = st.text_input("Número de Ticket Asignado:", value=st.session_state.numero_ticket_auto)
 
@@ -274,7 +271,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
 
                 elif metodo_pago == "Transferencia / Mercado Pago 📱":
                     referencia_pago = st.text_input("Folio / Clave de Rastreo (Opcional):", placeholder="Ej. 123456789")
-                    st.info("ℹ️ Asegúrate de verificar que el dinero se refleje en la cuenta antes di finalizar.")
+                    st.info("ℹ️ Asegúrate de verificar que el dinero se refleje en la cuenta antes de finalizar.")
 
                 elif metodo_pago == "Tarjeta (Débito/Crédito) 💳":
                     referencia_pago = st.text_input("Número de Autorización / Voucher (Opcional):", placeholder="Ej. 004521")
@@ -367,7 +364,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                         "referencia": referencia_pago
                     }
                     
-                    # Incrementar el consecutivo en la sesión para el siguiente ticket inmediato
+                    # Incrementar el consecutivo automático para el siguiente ticket
                     partes_t = numero_ticket.strip().split("-")
                     if len(partes_t) >= 3 and partes_t[2].isdigit():
                         siguiente_consecutivo = int(partes_t[2]) + 1
@@ -412,8 +409,8 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                 pago_info_html += f"Recibido: ${monto_recibido_val:,.2f}<br>Cambio:${cambio_val:,.2f}<br>"
                 pago_info_escpos += f"Recibido: ${monto_recibido_val:,.2f}\\nCambio:${cambio_val:,.2f}\\n"
 
-        ticket_linea_html = f"<div style='text-align: center; font-size: 11px; font-weight: bold;'>Ticket: {num_ticket_str}</div>" if num_ticket_str else ""
-        ticket_linea_escpos = f"Ticket: {num_ticket_str}\\n" if num_ticket_str else ""
+        ticket_linea_html = f"<div style='text-align: center; font-size: 12px; font-weight: bold; margin: 4px 0;'>Folio: {num_ticket_str}</div>" if num_ticket_str else ""
+        ticket_linea_escpos = f"Folio: {num_ticket_str}\\n" if num_ticket_str else ""
 
         items_html = '<br>'.join([f"{itm['Producto']}<br>&nbsp;&nbsp;Cant: {int(itm['Cantidad'])} | Total: ${itm['Total_Venta']:,.2f}" for itm in t['items']])
 
@@ -422,6 +419,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
             <div style="text-align: center; font-weight: bold; font-size: 14px;">TEXTILES CONCEPCION</div>
             <div style="text-align: center; font-size: 11px; font-weight: bold;">*** {tipo_op_str.upper()} ***</div>
             {ticket_linea_html}
+            <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
             <div style="text-align: center; font-size: 11px;">Sucursal: {sucursal_str}</div>
             <div style="text-align: center; font-size: 11px;">Atendió: {atendido_str}</div>
             <div style="text-align: center; font-size: 11px;">{fecha_str}</div>
@@ -504,6 +502,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                 escpos += "TEXTILES CONCEPCION\\n";
                 escpos += "*** {tipo_op_str.upper()} ***\\n";
                 {f'escpos += "{ticket_linea_escpos}\\n";' if num_ticket_str else ''}
+                escpos += "--------------------------------\\n";
                 escpos += "Sucursal: {sucursal_str}\\n";
                 escpos += "Atendio: {atendido_str}\\n";
                 escpos += "{fecha_str}\\n";
