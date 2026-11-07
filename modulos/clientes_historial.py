@@ -1,20 +1,28 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
 import streamlit.components.v1 as components
 from .base_datos import conectar_db
 
 def mostrar(acceso_propietaria):
-    st.title("👥 Historial de Compras por Cliente")
     st.title("👥 Historial de Compras por Cliente y Tickets")
-
+    
     tipo, conn = conectar_db()
     try:
-@@ -22,21 +24,21 @@ def mostrar(acceso_propietaria):
+        if tipo == "turso":
+            rs = conn.execute("SELECT DISTINCT Cliente FROM registro_ventas WHERE Cliente IS NOT NULL AND Cliente != '';")
+            clientes = [row[0] for row in rs.rows]
+        else:
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT Cliente FROM registro_ventas WHERE Cliente IS NOT NULL AND Cliente != '';")
+            clientes = [row[0] for row in cursor.fetchall()]
+    except Exception as e:
+        st.error(f"Error al cargar clientes: {e}")
+        clientes = []
+
+    if not clientes:
         st.info("No hay clientes con ventas registradas todavía.")
         return
 
-    cliente_sel = st.selectbox("Selecciona un cliente para ver su historial:", clientes)
     cliente_sel = st.selectbox("Selecciona un cliente para ver sus tickets e historial:", clientes)
 
     if cliente_sel:
@@ -22,7 +30,6 @@ def mostrar(acceso_propietaria):
             if tipo == "turso":
                 rs = conn.execute("SELECT * FROM registro_ventas WHERE TRIM(LOWER(Cliente)) = TRIM(LOWER(?));", (cliente_sel,))
                 filas = rs.rows
-                # En el SDK de Turso, las columnas se obtienen con rs.columns
                 columnas = rs.columns if hasattr(rs, 'columns') else []
                 df_cliente = pd.DataFrame(filas, columns=columnas) if filas else pd.DataFrame()
             else:
@@ -34,35 +41,38 @@ def mostrar(acceso_propietaria):
                 if "Total_Venta" in df_cliente.columns:
                     df_cliente["Total_Venta"] = pd.to_numeric(df_cliente["Total_Venta"], errors='coerce').fillna(0)
                     total_compras = df_cliente["Total_Venta"].sum()
-@@ -53,15 +55,252 @@ def mostrar(acceso_propietaria):
+                else:
+                    total_compras = 0.0
+
+                if "Ganancia" in df_cliente.columns:
+                    df_cliente["Ganancia"] = pd.to_numeric(df_cliente["Ganancia"], errors='coerce').fillna(0)
+                    ganancia_total = df_cliente["Ganancia"].sum()
+                else:
+                    ganancia_total = 0.0
+                
+                # Fondo Navideño (10%)
                 porcentaje_navideno = 0.10 
                 fondo_navideno = ganancia_total * porcentaje_navideno
 
-                st.markdown(f"### Resumen para: **{cliente_sel}**")
                 st.markdown(f"### Resumen General para: **{cliente_sel}**")
-
+                
                 col1, col2, col3 = st.columns(3)
                 col1.metric("💵 Total Compras", f"${total_compras:,.2f} MXN")
                 col2.metric("⭐ Ganancia Generada", f"${ganancia_total:,.2f} MXN", help="Utilidad neta generada por este cliente.")
                 col3.metric("🎄 Fondo Navideño (10%)", f"${fondo_navideno:,.2f} MXN", help="Porcentaje reservado exclusivamente de la ganancia para regalo o reembolso de fin de año.")
 
                 st.markdown("---")
-                st.dataframe(df_cliente, use_container_width=True)
                 st.markdown("### 🎫 Tickets Registrados del Cliente")
 
-                # Agrupar por Número de Ticket (si existe) o mostrar por fecha/operación
                 if "Numero_Ticket" in df_cliente.columns:
-                    # Rellenar tickets vacíos o nulos por si hay registros antiguos
                     df_cliente["Numero_Ticket"] = df_cliente["Numero_Ticket"].fillna("S/N").astype(str)
                     tickets_unicos = df_cliente["Numero_Ticket"].unique()
                 else:
                     tickets_unicos = ["S/N"]
 
-                # Selector o listado interactivo de tickets
                 for t_idx, num_tk in enumerate(tickets_unicos):
                     df_tk = df_cliente[df_cliente["Numero_Ticket"] == num_tk] if "Numero_Ticket" in df_cliente.columns else df_cliente
                     
-                    # Obtener metadatos del ticket
                     fecha_tk = df_tk["Fecha_Hora"].iloc[0] if "Fecha_Hora" in df_tk.columns and not df_tk["Fecha_Hora"].empty else "Fecha no registrada"
                     sucursal_tk = df_tk["Sucursal"].iloc[0] if "Sucursal" in df_tk.columns and not df_tk["Sucursal"].empty else "Tienda Chela"
                     tipo_op_tk = df_tk["Tipo_Operacion"].iloc[0] if "Tipo_Operacion" in df_tk.columns and not df_tk["Tipo_Operacion"].empty else "Venta"
@@ -77,14 +87,11 @@ def mostrar(acceso_propietaria):
                         st.write(f"**Sucursal:** {sucursal_tk} | **Tipo:** {tipo_op_tk} | **Atendió:** {atendido_tk}")
                         st.write(f"**Método de Pago:** {metodo_pago_tk}")
                         
-                        # Mostrar desglose de productos del ticket
                         cols_det = ["SKU", "Producto", "Nivel_Precio", "Precio_Unitario", "Cantidad", "Total_Venta"]
                         cols_existentes = [c for c in cols_det if c in df_tk.columns]
                         st.dataframe(df_tk[cols_existentes], use_container_width=True)
 
-                        # --- BOTÓN PARA REIMPRIMIR ESTE TICKET EN MTP-2 ---
                         if st.button(f"🖨️ Reimprimir Ticket {num_tk}", key=f"reimp_{num_tk}_{t_idx}"):
-                            # Preparar estructura para el componente de impresión Bluetooth MTP-2
                             items_lista_reimp = []
                             for _, row_i in df_tk.iterrows():
                                 items_lista_reimp.append({
@@ -107,10 +114,10 @@ def mostrar(acceso_propietaria):
                                 "cambio": cambio_tk,
                                 "referencia": ""
                             }
-                            st.success(f"¡Ticket {num_tk} cargado en el módulo de impresión Bluetooth!")
+                            st.success(f"¡Ticket {num_tk} cargado para reimpresión!")
                             st.rerun()
 
-                # --- VISUALIZADOR Y BOTÓN DE IMPRESIÓN BLUETOOTH MTP-2 (SI SE SELECCIONÓ REIMPRIMIR) ---
+                # --- VISUALIZADOR Y BOTÓN DE IMPRESIÓN FUERA DEL CICLO ---
                 if "ultimo_ticket" in st.session_state and st.session_state.ultimo_ticket:
                     t = st.session_state.ultimo_ticket
                     st.markdown("---")
@@ -170,13 +177,11 @@ def mostrar(acceso_propietaria):
                         <div style="text-align: right; font-weight: bold; font-size: 13px;">TOTAL: {total_str}</div>
                         <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
                         
-                        <!-- Datos de contacto y horario -->
                         <div style="text-align: center; font-size: 11px; margin: 8px 0;">
                             <b>Tel: 246 757 61 27</b><br>
                             Horario: 11:00 am a 7:00 pm
                         </div>
                         
-                        <!-- Vista previa del código QR con textilanitmari.com -->
                         <div style="text-align: center; margin: 10px 0;">
                             <p style="font-size: 10px; margin-bottom: 4px;">Escanea para visitar nuestra web:</p>
                             <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://textilanitmari.com" alt="QR Web" style="width: 100px; height: 100px;" />
@@ -230,8 +235,8 @@ def mostrar(acceso_propietaria):
 
                             estado.innerText = "Enviando ticket a MTP-2...";
 
-                            let escpos = "\\x1B\\x40"; // Reset
-                            escpos += "\\x1B\\x61\\x01"; // Centrar
+                            let escpos = "\\x1B\\x40"; 
+                            escpos += "\\x1B\\x61\\x01"; 
                             escpos += "TEXTILES CONCEPCION\\n";
                             escpos += "*** {tipo_op_str.upper()} ***\\n";
                             {f'escpos += "{ticket_linea_escpos}\\n";' if num_ticket_str else ''}
@@ -240,7 +245,7 @@ def mostrar(acceso_propietaria):
                             escpos += "Atendio: {atendido_str}\\n";
                             escpos += "{fecha_str}\\n";
                             escpos += "--------------------------------\\n";
-                            escpos += "\\x1B\\x61\\x00"; // Izquierda
+                            escpos += "\\x1B\\x61\\x00"; 
                             escpos += "Cliente: {cliente_str}\\n";
                             escpos += "--------------------------------\\n";
                             
@@ -249,10 +254,10 @@ def mostrar(acceso_propietaria):
                             escpos += "--------------------------------\\n";
                             escpos += "{pago_info_escpos}";
                             escpos += "--------------------------------\\n";
-                            escpos += "\\x1B\\x61\\x02"; // Derecha
+                            escpos += "\\x1B\\x61\\x02"; 
                             escpos += "TOTAL: {total_str}\\n\\n";
                             
-                            escpos += "\\x1B\\x61\\x01"; // Centrar
+                            escpos += "\\x1B\\x61\\x01"; 
                             escpos += "Tel: 246 757 61 27\\n";
                             escpos += "Horario: 11:00 am a 7:00 pm\\n";
                             escpos += "Visita nuestra web:\\n";
@@ -285,3 +290,9 @@ def mostrar(acceso_propietaria):
                     if st.button("✖️ Cerrar Vista de Reimpresión"):
                         del st.session_state.ultimo_ticket
                         st.rerun()
+
+            else:
+                st.info("Este cliente no tiene compras registradas en el sistema.")
+
+        except Exception as e:
+            st.error(f"Error al generar el historial del cliente: {e}")
