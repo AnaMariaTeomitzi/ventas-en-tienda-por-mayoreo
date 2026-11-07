@@ -150,7 +150,9 @@ def mostrar(acceso_propietaria):
                             pago_info_escpos += f"Recibido: ${monto_recibido_val:,.2f}\\nCambio:${cambio_val:,.2f}\\n"
 
                     ticket_linea_html = f"<div style='text-align: center; font-size: 12px; font-weight: bold; margin: 4px 0;'>Folio: {num_ticket_str}</div>" if num_ticket_str else ""
-                    ticket_linea_escpos = f"Folio: {num_ticket_str}\\n" if num_ticket_str else ""
+                    
+                    # Solución limpia sin f-strings anidados para evitar errores de sintaxis
+                    ticket_linea_escpos = f'escpos += "Folio: {num_ticket_str}\\n";' if num_ticket_str else ''
 
                     items_html = '<br>'.join([f"{itm['Producto']}<br>&nbsp;&nbsp;Cant: {int(itm['Cantidad'])} | Total: ${itm['Total_Venta']:,.2f}" for itm in t['items']])
 
@@ -239,7 +241,7 @@ def mostrar(acceso_propietaria):
                             escpos += "\\x1B\\x61\\x01"; 
                             escpos += "TEXTILES CONCEPCION\\n";
                             escpos += "*** {tipo_op_str.upper()} ***\\n";
-                            {f'escpos += "{ticket_linea_escpos}\\n";' if num_ticket_str else ''}
+                            {ticket_linea_escpos}
                             escpos += "--------------------------------\\n";
                             escpos += "Sucursal: {sucursal_str}\\n";
                             escpos += "Atendio: {atendido_str}\\n";
@@ -279,7 +281,7 @@ def mostrar(acceso_propietaria):
                             }}
 
                             estado.innerText = "✅ ¡Ticket impreso con éxito en MTP-2!";
-                        } catch (error) {{
+                        }} catch (error) {{
                             estado.innerText = "❌ Error: " + error.message;
                         }}
                     }}
