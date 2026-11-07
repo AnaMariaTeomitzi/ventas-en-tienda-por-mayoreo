@@ -495,7 +495,20 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                 escpos += "¡Gracias por su preferencia!\\n\\n\\n";
 
                 const encoder = new TextEncoder();
-                await writeCharacteristic.writeValue(encoder.encode(escpos));
+                const data = encoder.encode(escpos);
+
+                // Enviar en bloques pequeños (chunks de 100 bytes) para evitar saturar el búfer Bluetooth de la MTP-2
+                const chunkSize = 100;
+                for (let i = 0; i < data.length; i += chunkSize) {{
+                    const chunk = data.slice(i, i + chunkSize);
+                    if (writeCharacteristic.properties.writeWithoutResponse) {{
+                        await writeCharacteristic.writeValueWithoutResponse(chunk);
+                    }} else {{
+                        await writeCharacteristic.writeValue(chunk);
+                    }}
+                    // Pequeña pausa para permitir que la impresora procese el bloque
+                    await new Promise(resolve => setTimeout(resolve, 30));
+                }}
 
                 estado.innerText = "✅ ¡Ticket impreso con éxito en MTP-2!";
             }} catch (error) {{
