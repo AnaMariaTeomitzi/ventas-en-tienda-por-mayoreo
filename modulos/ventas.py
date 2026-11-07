@@ -6,22 +6,54 @@ import os
 import streamlit.components.v1 as components
 from .base_datos import obtener_clientes_recurrentes_lista, guardar_venta_db, obtener_historial_ventas, VENTAS_FILE, conectar_db
 
+def obtener_siguiente_folio(anio_actual):
+    """
+    Consulta el historial de ventas para determinar el próximo número consecutivo 
+    del año actual (ej. TCK-2026-1, TCK-2026-2...).
+    """
+    try:
+        df_hist = obtener_historial_ventas()
+        if not df_hist.empty and "Numero_Ticket" in df_hist.columns:
+            # Filtrar los tickets que comiencen con el año actual
+            prefijo_anio = f"TCK-{anio_actual}-"
+            tickets_anio = df_hist[df_hist["Numero_Ticket"].astype(str).str.startswith(prefijo_anio)]
+            
+            if not tickets_anio.empty:
+                # Extraer el número consecutivo final de cada ticket
+                consecutivos = []
+                for t in tickets_anio["Numero_Ticket"].astype(str):
+                    partes = t.split("-")
+                    if len(partes) >= 3 and partes[2].isdigit():
+                        consecutivos.append(int(partes[2]))
+                
+                if consecutivos:
+                    return max(consecutivos) + 1
+        return 1
+    except Exception:
+        return 1
+
 def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucursal_activa="Tienda Chela"):
     st.title("🛒 Control de Ventas")
 
-    # --- OBTENER USUARIO LOGueado EN SESIÓN ---
+    # --- OBTENER USUARIO LOGUEADO EN SESIÓN ---
     usuario_actual = st.session_state.get("username", st.session_state.get("usuario", "Mostrador"))
 
     # --- VALIDACIÓN DE HORARIO EN ZONA HORARIA DE MÉXICO ---
     zona_mx = zoneinfo.ZoneInfo("America/Mexico_City")
     ahora_actual = datetime.now(zona_mx)
     hora_actual = ahora_actual.hour  # 0 a 23 hrs
+    anio_actual = ahora_actual.year
 
     # Permitir ventas únicamente entre las 8:00 (8) y las 19:00 (19) hora de México
     horario_permitido = 8 <= hora_actual < 19
 
     if not horario_permitido:
         st.warning(f"⏰ **Horario de ventas cerrado.** El registro de ventas solo está disponible de **8:00 AM a 7:00 PM**. (Hora local actual: {ahora_actual.strftime('%I:%M %p')})")
+
+    # --- AUTOMATIZACIÓN DEL FOLIO DE TICKET ---
+    if "numero_ticket_auto" not in st.session_state:
+        siguiente_num = obtener_siguiente_folio(anio_actual)
+        st.session_state.numero_ticket_auto = f"TCK-{anio_actual}-{siguiente_num}"
 
     lista_recurrentes_nombres = obtener_clientes_recurrentes_lista()
 
@@ -50,10 +82,10 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
     with col_toggle:
         st.write("") 
         st.write("")
-        permitir_manual = st.toggle("🔓 Habilitar Selección Manual de Mayoreo", value=False, help="Activa esta opción si deseas forzar un nivel de mayoreo específico.")
+        permitir_manual = st.toggle("🔓 Habilitar Selección Manual de Mayoreo", value=False, help="Activa esta opción si deseas forzar un nivel de mayoreo específico general.")
 
     if permitir_manual:
-        st.warning("⚠️ **Modo manual activo:** El nivel de precio seleccionado manualmente se aplicará al producto agregado.")
+        st.warning("⚠️ **Modo manual activo:** El nivel de precio seleccionado manualmente se aplicará al carrito.")
 
     es_cliente_recurrente_preferente = (cliente.strip().lower() in [c.lower() for c in lista_recurrentes_nombres]) and (cliente.strip().lower() != "público general")
 
@@ -97,7 +129,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
     else:
         df_filtrado = df_catalogo
 
-    col1, col2, col3 = st.columns([2, 1, 1])
+    col1, col2 = st.columns([3, 1])
 
     with col1:
         if not df_filtrado.empty:
@@ -112,29 +144,16 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
     with col2:
         cantidad = st.number_input("Cantidad", min_value=1, value=1, step=1)
 
-    with col3:
-        if sku is not None and not df_filtrado.empty:
-            estimacion_bruta = max(monto_evaluacion, monto_bruto_carrito + (cantidad * float(info_producto.get("Precio_Menudeo", 0.0))))
-            nivel_sugerido_linea = obtener_nivel_por_monto(estimacion_bruta, es_cliente_recurrente_preferente)
-
-            dict_precios = {
-                "Menudeo (Precio 1)": info_producto.get("Precio_Menudeo", 0.0),
-                "Mayoreo Nivel 1 (Precio 2)": info_producto.get("Precio_Mayoreo_1", info_producto.get("Precio_Menudeo", 0.0)),
-                "Mayoreo Nivel 2 (Precio 3)": info_producto.get("Precio_Mayoreo_2", info_producto.get("Precio_Mayoreo_1", info_producto.get("Precio_Menudeo", 0.0))),
-                "Especial / Distribuidor (Precio 4)": info_producto.get("Precio_Especial", info_producto.get("Precio_Mayoreo_1", info_producto.get("Precio_Menudeo", 0.0)))
-            }
-            
-            keys_precios = list(dict_precios.keys())
-            idx_default = keys_precios.index(nivel_sugerido_linea) if nivel_sugerido_linea in keys_precios else 0
-
-            nivel_elegido = st.selectbox(
-                "Nivel de Precio Aplicado", 
-                keys_precios, 
-                index=idx_default, 
-                disabled=not permitir_manual
-            )
-        else:
-            nivel_elegido = None
+    if permitir_manual:
+        dict_precios_keys = [
+            "Menudeo (Precio 1)", 
+            "Mayoreo Nivel 1 (Precio 2)", 
+            "Mayoreo Nivel 2 (Precio 3)", 
+            "Especial / Distribuidor (Precio 4)"
+        ]
+        nivel_manual_elegido = st.selectbox("Nivel de Precio Manual Global", dict_precios_keys)
+    else:
+        nivel_manual_elegido = None
 
     if sku is not None and not df_filtrado.empty:
         if st.button("➕ Agregar al Carrito", use_container_width=True):
@@ -146,8 +165,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                 "Precio_Mayoreo_2": float(info_producto.get("Precio_Mayoreo_2", 0.0)),
                 "Precio_Especial": float(info_producto.get("Precio_Especial", 0.0)),
                 "Costo_Unitario": float(info_producto.get("Costo", 0.0)),
-                "Cantidad": cantidad,
-                "Override_Nivel": nivel_elegido if permitir_manual else None
+                "Cantidad": cantidad
             })
             st.success(f"Agregado: {info_producto['Producto']}")
             st.rerun()
@@ -158,26 +176,27 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
 
         monto_bruto_total = sum(item["Cantidad"] * item["Precio_Menudeo"] for item in st.session_state.carrito)
         monto_evaluar_global = max(total_compras_historico_cliente, monto_bruto_total)
-        nivel_global_alcanzado = obtener_nivel_por_monto(monto_evaluar_global, es_cliente_recurrente_preferente)
+        
+        if permitir_manual and nivel_manual_elegido:
+            nivel_global_alcanzado = nivel_manual_elegido
+        else:
+            nivel_global_alcanzado = obtener_nivel_por_monto(monto_evaluar_global, es_cliente_recurrente_preferente)
 
         if nivel_global_alcanzado == "Especial / Distribuidor (Precio 4)":
-            st.success(f"⭐ **¡Umbral Especial Alcanzado!** Subtotal regular: ${monto_bruto_total:,.2f} MXN (≥${monto_especial:,.2f}). **Todos los productos adoptan Precio Especial.**")
+            st.success(f"⭐ **¡Umbral Especial Alcanzado!** Subtotal regular: ${monto_bruto_total:,.2f} MXN. **Todos los productos adoptan Precio Especial.**")
         elif nivel_global_alcanzado == "Mayoreo Nivel 2 (Precio 3)":
-            st.info(f"⭐ **¡Umbral Mayoreo 2 Alcanzado!** Subtotal regular: ${monto_bruto_total:,.2f} MXN (≥${monto_mayoreo_2:,.2f}). **Todos los productos adoptan Mayoreo 2.**")
+            st.info(f"⭐ **¡Umbral Mayoreo 2 Alcanzado!** Subtotal regular: ${monto_bruto_total:,.2f} MXN. **Todos los productos adoptan Mayoreo 2.**")
         elif nivel_global_alcanzado == "Mayoreo Nivel 1 (Precio 2)":
             if es_cliente_recurrente_preferente and monto_evaluar_global < monto_mayoreo_1:
                 st.info(f"⭐ **Cliente Recurrente:** Se aplica **Mayoreo Nivel 1** garantizado por lista preferente.")
             else:
-                st.info(f"⭐ **¡Umbral Mayoreo 1 Alcanzado!** Subtotal regular: ${monto_bruto_total:,.2f} MXN (≥${monto_mayoreo_1:,.2f}). **Todos los productos adoptan Mayoreo 1.**")
+                st.info(f"⭐ **¡Umbral Mayoreo 1 Alcanzado!** Subtotal regular: ${monto_bruto_total:,.2f} MXN. **Todos los productos adoptan Mayoreo 1.**")
 
         total_general = 0.0
         indices_a_eliminar = []
 
         for idx, item in enumerate(st.session_state.carrito):
-            if item.get("Override_Nivel"):
-                nivel_aplicado = item["Override_Nivel"]
-            else:
-                nivel_aplicado = nivel_global_alcanzado
+            nivel_aplicado = nivel_global_alcanzado
 
             if nivel_aplicado == "Especial / Distribuidor (Precio 4)":
                 precio_unitario = float(item["Precio_Especial"])
@@ -191,13 +210,12 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
             total_linea = precio_unitario * item["Cantidad"]
             total_general += total_linea
 
-            cols_fila = st.columns([1.2, 3, 2.2, 1.2, 1.2, 1.2])
+            cols_fila = st.columns([1.2, 3, 1.2, 1.2, 1.2])
             cols_fila[0].write(f"**{item['SKU']}**")
             cols_fila[1].write(item['Producto'])
-            cols_fila[2].write(f"*{nivel_aplicado}*")
-            cols_fila[3].write(f"${precio_unitario:,.2f}")
-            cols_fila[4].write(f"{item['Cantidad']} pza(s)")
-            cols_fila[5].write(f"**${total_linea:,.2f}**")
+            cols_fila[2].write(f"${precio_unitario:,.2f}")
+            cols_fila[3].write(f"{item['Cantidad']} pza(s)")
+            cols_fila[4].write(f"**${total_linea:,.2f}**")
 
             if st.button("🗑️ Quitar", key=f"del_{idx}"):
                 indices_a_eliminar.append(idx)
@@ -209,6 +227,10 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
 
         st.markdown("---")
         st.markdown(f"### 💰 **Total a Pagar / Cotizar:** `${total_general:,.2f} MXN`")
+
+        # --- MOSTRAR FOLIO AUTOMÁTICO (EDITABLE SI SE DESEA CORREGIR) ---
+        st.markdown("### 🔢 Folio de Ticket")
+        numero_ticket = st.text_input("Número de Ticket Asignado:", value=st.session_state.numero_ticket_auto)
 
         # --- SECCIÓN: TIPO DE OPERACIÓN Y PAGO ---
         st.markdown("### 💳 Tipo de Operación y Forma de Pago")
@@ -252,7 +274,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
 
                 elif metodo_pago == "Transferencia / Mercado Pago 📱":
                     referencia_pago = st.text_input("Folio / Clave de Rastreo (Opcional):", placeholder="Ej. 123456789")
-                    st.info("ℹ️ Asegúrate de verificar que el dinero se refleje en la cuenta antes de finalizar.")
+                    st.info("ℹ️ Asegúrate de verificar que el dinero se refleje en la cuenta antes di finalizar.")
 
                 elif metodo_pago == "Tarjeta (Débito/Crédito) 💳":
                     referencia_pago = st.text_input("Número de Autorización / Voucher (Opcional):", placeholder="Ej. 004521")
@@ -280,10 +302,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                 ahora = datetime.now(zona_mx)
                 items_finales = []
                 for item in st.session_state.carrito:
-                    if item.get("Override_Nivel"):
-                        nivel_aplicado = item["Override_Nivel"]
-                    else:
-                        nivel_aplicado = nivel_global_alcanzado
+                    nivel_aplicado = nivel_global_alcanzado
 
                     if nivel_aplicado == "Especial / Distribuidor (Precio 4)":
                         p_unit = float(item["Precio_Especial"])
@@ -302,6 +321,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                         "Fecha": ahora.strftime("%Y-%m-%d"),
                         "Sucursal": sucursal_activa,
                         "Cliente": cliente.strip(),
+                        "Numero_Ticket": numero_ticket.strip(),
                         "SKU": str(item["SKU"]),
                         "Producto": str(item["Producto"]),
                         "Nivel_Precio": str(nivel_aplicado),
@@ -328,12 +348,13 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
 
                 if exito:
                     if tipo_operacion == "🛒 Venta Confirmada":
-                        st.success(f"⭐ ¡Venta registrada y sincronizada con éxito en Turso para '{cliente.strip()}'!")
+                        st.success(f"⭐ ¡Venta registrada con éxito (Folio: {numero_ticket.strip()})!")
                     else:
-                        st.success(f"📄 ¡Presupuesto generado con éxito para '{cliente.strip()}'!")
+                        st.success(f"📄 ¡Presupuesto generado con éxito (Folio: {numero_ticket.strip()})!")
                         
                     st.session_state.ultimo_ticket = {
                         "tipo_operacion": tipo_operacion,
+                        "numero_ticket": numero_ticket.strip(),
                         "cliente": cliente.strip(),
                         "sucursal": sucursal_activa,
                         "atendido_por": usuario_actual,
@@ -345,8 +366,14 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                         "cambio": cambio,
                         "referencia": referencia_pago
                     }
+                    
+                    # Incrementar el consecutivo en la sesión para el siguiente ticket inmediato
+                    partes_t = numero_ticket.strip().split("-")
+                    if len(partes_t) >= 3 and partes_t[2].isdigit():
+                        siguiente_consecutivo = int(partes_t[2]) + 1
+                        st.session_state.numero_ticket_auto = f"TCK-{anio_actual}-{siguiente_consecutivo}"
                 else:
-                    st.error("Hubo un error al guardar la venta en la base de datos de Turso.")
+                    st.error("Hubo un error al guardar la venta en la base de datos.")
 
                 st.session_state.carrito = []
                 st.rerun()
@@ -369,6 +396,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
         atendido_str = str(t.get('atendido_por', usuario_actual))
         fecha_str = str(t['fecha'])
         cliente_str = str(t['cliente'])
+        num_ticket_str = str(t.get('numero_ticket', ''))
         total_str = f"${t['total']:,.2f}"
         tipo_op_str = str(t.get('tipo_operacion', 'VENTA'))
         metodo_pago_str = str(t.get('metodo_pago', 'N/A'))
@@ -384,12 +412,16 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                 pago_info_html += f"Recibido: ${monto_recibido_val:,.2f}<br>Cambio:${cambio_val:,.2f}<br>"
                 pago_info_escpos += f"Recibido: ${monto_recibido_val:,.2f}\\nCambio:${cambio_val:,.2f}\\n"
 
+        ticket_linea_html = f"<div style='text-align: center; font-size: 11px; font-weight: bold;'>Ticket: {num_ticket_str}</div>" if num_ticket_str else ""
+        ticket_linea_escpos = f"Ticket: {num_ticket_str}\\n" if num_ticket_str else ""
+
         items_html = '<br>'.join([f"{itm['Producto']}<br>&nbsp;&nbsp;Cant: {int(itm['Cantidad'])} | Total: ${itm['Total_Venta']:,.2f}" for itm in t['items']])
 
         bluetooth_vta_html = f"""
         <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px solid #ddd; max-width: 320px; font-family: 'Courier New', monospace;">
             <div style="text-align: center; font-weight: bold; font-size: 14px;">TEXTILES CONCEPCION</div>
             <div style="text-align: center; font-size: 11px; font-weight: bold;">*** {tipo_op_str.upper()} ***</div>
+            {ticket_linea_html}
             <div style="text-align: center; font-size: 11px;">Sucursal: {sucursal_str}</div>
             <div style="text-align: center; font-size: 11px;">Atendió: {atendido_str}</div>
             <div style="text-align: center; font-size: 11px;">{fecha_str}</div>
@@ -471,6 +503,7 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                 escpos += "\\x1B\\x61\\x01"; // Centrar
                 escpos += "TEXTILES CONCEPCION\\n";
                 escpos += "*** {tipo_op_str.upper()} ***\\n";
+                {f'escpos += "{ticket_linea_escpos}\\n";' if num_ticket_str else ''}
                 escpos += "Sucursal: {sucursal_str}\\n";
                 escpos += "Atendio: {atendido_str}\\n";
                 escpos += "{fecha_str}\\n";
@@ -497,7 +530,6 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                 const encoder = new TextEncoder();
                 const data = encoder.encode(escpos);
 
-                // Enviar en bloques pequeños (chunks de 100 bytes) para evitar saturar el búfer Bluetooth de la MTP-2
                 const chunkSize = 100;
                 for (let i = 0; i < data.length; i += chunkSize) {{
                     const chunk = data.slice(i, i + chunkSize);
@@ -506,7 +538,6 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
                     }} else {{
                         await writeCharacteristic.writeValue(chunk);
                     }}
-                    // Pequeña pausa para permitir que la impresora procese el bloque
                     await new Promise(resolve => setTimeout(resolve, 30));
                 }}
 
