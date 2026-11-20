@@ -48,14 +48,69 @@ def _es_articulo_agotado(sku, info_producto=None):
     sku_limpio = str(sku).strip()
     if sku_limpio in st.session_state.get("skus_agotados", set()):
         return True
-    if info_producto is not None:
-        if "Stock" in info_producto.index:
-            try:
-                if float(info_producto["Stock"]) <= 0:
-                    return True
-            except Exception:
-                pass
+    if info_producto is not None and "Stock" in info_producto.index:
+        try:
+            if float(info_producto["Stock"]) <= 0:
+                return True
+        except Exception:
+            pass
     return False
+
+
+@st.dialog("⚙️ Panel de Catálogo: Artículos Agotados", width="large")
+def _modal_gestionar_agotados(df_catalogo):
+    """Ventana emergente para marcar o desmarcar artículos agotados en el catálogo."""
+    st.caption(f"Artículos actualmente marcados como agotados: **{len(st.session_state.skus_agotados)}**")
+
+    filtro_modal = st.text_input(
+        "🔍 Filtrar por SKU o nombre:",
+        placeholder="Ej. Cobertor, Sábana, SKU...",
+        key="filtro_modal_agotados"
+    )
+
+    if df_catalogo is None or df_catalogo.empty:
+        st.info("No hay artículos en el catálogo para mostrar.")
+        return
+
+    if filtro_modal.strip() != "":
+        mask_m = (
+            df_catalogo["Producto"].astype(str).str.contains(filtro_modal, case=False, na=False)
+            | df_catalogo["SKU"].astype(str).str.contains(filtro_modal, case=False, na=False)
+        )
+        df_vista = df_catalogo.loc[mask_m].head(40)
+    else:
+        df_vista = df_catalogo.head(40)
+        if len(df_catalogo) > 40:
+            st.caption("Mostrando los primeros 40 artículos. Escribe arriba para filtrar más.")
+
+    with st.form("form_modal_agotados"):
+        seleccion_temporal = {}
+
+        for idx_row, fila in df_vista.iterrows():
+            sku_item = str(fila["SKU"]).strip()
+            prod_item = str(fila["Producto"]).strip()
+            esta_agotado_actual = sku_item in st.session_state.skus_agotados
+
+            c1, c2 = st.columns([4, 1.2])
+            with c1:
+                estado_txt = "🔴 AGOTADO" if esta_agotado_actual else "🟢 Disponible"
+                st.write(f"**{sku_item}** — {prod_item} · {estado_txt}")
+            with c2:
+                seleccion_temporal[sku_item] = st.checkbox(
+                    "Agotado",
+                    value=esta_agotado_actual,
+                    key=f"modal_chk_{sku_item}_{idx_row}"
+                )
+
+        guardar_cambios = st.form_submit_button("💾 Guardar cambios de agotados", type="primary", use_container_width=True)
+
+        if guardar_cambios:
+            for sku_k, marcado_v in seleccion_temporal.items():
+                if marcado_v:
+                    st.session_state.skus_agotados.add(sku_k)
+                else:
+                    st.session_state.skus_agotados.discard(sku_k)
+            st.rerun()
 
 
 def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucursal_activa="Tienda Chela"):
@@ -146,51 +201,18 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
         else:
             return "Menudeo (Precio 1)"
 
-    # --- PANEL PARA MARCAR ARTÍCULOS AGOTADOS EN CATÁLOGO ---
-    with st.expander("⚙️ Panel de Catálogo: Marcar Artículos Agotados", expanded=False):
-        st.caption(f"Total marcados como agotados en esta sesión: **{len(st.session_state.skus_agotados)}**")
-        filtro_panel_agotados = st.text_input(
-            "Filtrar artículos en el panel de agotados:",
-            placeholder="Escribe SKU o nombre para marcar/desmarcar...",
-            key="filtro_panel_agotados"
-        )
-
-        if df_catalogo is not None and not df_catalogo.empty:
-            if filtro_panel_agotados.strip() != "":
-                mask_p = (
-                    df_catalogo["Producto"].astype(str).str.contains(filtro_panel_agotados, case=False, na=False)
-                    | df_catalogo["SKU"].astype(str).str.contains(filtro_panel_agotados, case=False, na=False)
-                )
-                df_panel = df_catalogo.loc[mask_p].head(30)
-            else:
-                df_panel = df_catalogo.head(30)
-                if len(df_catalogo) > 30:
-                    st.info("Mostrando los primeros 30 artículos. Usa el buscador de arriba para filtrar cualquier otro.")
-
-            for idx_row, fila in df_panel.iterrows():
-                sku_item = str(fila["SKU"]).strip()
-                prod_item = str(fila["Producto"]).strip()
-                esta_agotado_actual = sku_item in st.session_state.skus_agotados
-
-                col_p1, col_p2 = st.columns([3.5, 1.5])
-                with col_p1:
-                    etiqueta_estado = "🔴 AGOTADO" if esta_agotado_actual else "🟢 Disponible"
-                    st.write(f"**{sku_item}** - {prod_item} · {etiqueta_estado}")
-                with col_p2:
-                    marcado = st.checkbox(
-                        "Agotado",
-                        value=esta_agotado_actual,
-                        key=f"chk_agotado_{sku_item}_{idx_row}"
-                    )
-                    if marcado != esta_agotado_actual:
-                        if marcado:
-                            st.session_state.skus_agotados.add(sku_item)
-                        else:
-                            st.session_state.skus_agotados.discard(sku_item)
-                        st.rerun()
-
+    # --- BÚSQUEDA Y BOTÓN DE VENTANA EMERGENTE DE AGOTADOS ---
     st.markdown("### 🛍️ Búsqueda y Selección de Producto")
-    busqueda_texto = st.text_input("🔍 Buscar producto (nombre o SKU):", placeholder="Ej. Cobertor, Sábanas...")
+    col_busq, col_btn_modal = st.columns([3.5, 1.5])
+
+    with col_busq:
+        busqueda_texto = st.text_input("🔍 Buscar producto (nombre o SKU):", placeholder="Ej. Cobertor, Sábanas...")
+
+    with col_btn_modal:
+        st.write("")
+        st.write("")
+        if st.button(f"⚙️ Agotados ({len(st.session_state.skus_agotados)})", use_container_width=True):
+            _modal_gestionar_agotados(df_catalogo)
 
     if busqueda_texto.strip() != "":
         mask = df_catalogo["Producto"].astype(str).str.contains(busqueda_texto, case=False, na=False) | \
@@ -230,7 +252,6 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
             opciones_productos = [_formatear_opcion(r) for _, r in df_filtrado.iterrows()]
             producto_seleccionado = st.selectbox("Resultados de Búsqueda", opciones_productos)
 
-            # Extraer SKU limpio quitando el prefijo si existe
             texto_sin_prefijo = producto_seleccionado.replace("⛔ [AGOTADO] ", "", 1)
             sku = texto_sin_prefijo.split(" - ")[0].strip()
             info_producto = df_catalogo[df_catalogo["SKU"].astype(str).str.strip() == sku].iloc[0]
@@ -277,4 +298,387 @@ def mostrar(df_catalogo, monto_mayoreo_1, monto_mayoreo_2, monto_especial, sucur
             st.success(f"Agregado: {info_producto['Producto']}")
             st.rerun()
 
-    # ... el resto de tu código continúa igual ...
+    if len(st.session_state.carrito) > 0:
+        st.markdown("---")
+        st.markdown("### 📋 Resumen del Ticket Actual")
+
+        monto_bruto_total = sum(item["Cantidad"] * item["Precio_Menudeo"] for item in st.session_state.carrito)
+        monto_evaluar_global = max(total_compras_historico_cliente, monto_bruto_total)
+        
+        if permitir_manual and nivel_manual_elegido:
+            nivel_global_alcanzado = nivel_manual_elegido
+        else:
+            nivel_global_alcanzado = obtener_nivel_por_monto(monto_evaluar_global, es_cliente_recurrente_preferente)
+
+        if nivel_global_alcanzado == "Especial / Distribuidor (Precio 4)":
+            st.success(f"⭐ **¡Umbral Especial Alcanzado!** Subtotal regular: ${monto_bruto_total:,.2f} MXN. **Todos los productos adoptan Precio Especial.**")
+        elif nivel_global_alcanzado == "Mayoreo Nivel 2 (Precio 3)":
+            st.info(f"⭐ **¡Umbral Mayoreo 2 Alcanzado!** Subtotal regular: ${monto_bruto_total:,.2f} MXN. **Todos los productos adoptan Mayoreo 2.**")
+        elif nivel_global_alcanzado == "Mayoreo Nivel 1 (Precio 2)":
+            if es_cliente_recurrente_preferente and monto_evaluar_global < monto_mayoreo_1:
+                st.info(f"⭐ **Cliente Recurrente:** Se aplica **Mayoreo Nivel 1** garantizado por lista preferente.")
+            else:
+                st.info(f"⭐ **¡Umbral Mayoreo 1 Alcanzado!** Subtotal regular: ${monto_bruto_total:,.2f} MXN. **Todos los productos adoptan Mayoreo 1.**")
+
+        total_general = 0.0
+        indices_a_eliminar = []
+
+        for idx, item in enumerate(st.session_state.carrito):
+            nivel_aplicado = nivel_global_alcanzado
+
+            if nivel_aplicado == "Especial / Distribuidor (Precio 4)":
+                precio_unitario = float(item["Precio_Especial"])
+            elif nivel_aplicado == "Mayoreo Nivel 2 (Precio 3)":
+                precio_unitario = float(item["Precio_Mayoreo_2"])
+            elif nivel_aplicado == "Mayoreo Nivel 1 (Precio 2)":
+                precio_unitario = float(item["Precio_Mayoreo_1"])
+            else:
+                precio_unitario = float(item["Precio_Menudeo"])
+
+            total_linea = precio_unitario * item["Cantidad"]
+            total_general += total_linea
+
+            cols_fila = st.columns([1.2, 3, 1.2, 1.2, 1.2])
+            cols_fila[0].write(f"**{item['SKU']}**")
+            cols_fila[1].write(item['Producto'])
+            cols_fila[2].write(f"${precio_unitario:,.2f}")
+            cols_fila[3].write(f"{item['Cantidad']} pza(s)")
+            cols_fila[4].write(f"**${total_linea:,.2f}**")
+
+            if st.button("🗑️ Quitar", key=f"del_{idx}"):
+                indices_a_eliminar.append(idx)
+
+        if indices_a_eliminar:
+            for i in sorted(indices_a_eliminar, reverse=True):
+                st.session_state.carrito.pop(i)
+            st.rerun()
+
+        st.markdown("---")
+        st.markdown(f"### 💰 **Total a Pagar / Cotizar:** `${total_general:,.2f} MXN`")
+
+        # --- CAMPO NÚMERO DE TICKET AUTOMÁTICO ---
+        st.markdown("### 🔢 Folio de Ticket")
+        numero_ticket = st.text_input("Número de Ticket Asignado:", value=st.session_state.numero_ticket_auto)
+
+        # --- SECCIÓN: TIPO DE OPERACIÓN Y PAGO ---
+        st.markdown("### 💳 Tipo de Operación y Forma de Pago")
+        
+        tipo_operacion = st.radio(
+            "Selecciona el Tipo de Operación:",
+            options=["🛒 Venta Confirmada", "📄 Presupuesto / Cotización"],
+            horizontal=True
+        )
+
+        metodo_pago = "N/A"
+        monto_recibido = total_general
+        cambio = 0.0
+        referencia_pago = ""
+
+        if tipo_operacion == "🛒 Venta Confirmada":
+            col_metodo, col_detalle = st.columns([1, 1.2])
+            
+            with col_metodo:
+                metodo_pago = st.selectbox(
+                    "Método de Pago:",
+                    ["Efectivo 💵", "Transferencia / Mercado Pago 📱", "Tarjeta (Débito/Crédito) 💳"]
+                )
+                
+            with col_detalle:
+                if metodo_pago == "Efectivo 💵":
+                    monto_recibido = st.number_input(
+                        "Monto Recibido de Cliente ($):", 
+                        min_value=0.0, 
+                        value=float(total_general), 
+                        step=10.0,
+                        format="%.2f"
+                    )
+                    cambio = monto_recibido - total_general
+                    
+                    if monto_recibido >= total_general:
+                        st.metric(label="Cambio a Entregar", value=f"${cambio:,.2f} MXN")
+                    else:
+                        falta = total_general - monto_recibido
+                        st.warning(f"⚠️ Cantidad insuficiente. Faltan: **${falta:,.2f} MXN**")
+
+                elif metodo_pago == "Transferencia / Mercado Pago 📱":
+                    referencia_pago = st.text_input("Folio / Clave de Rastreo (Opcional):", placeholder="Ej. 123456789")
+                    st.info("ℹ️ Asegúrate de verificar que el dinero se refleje en la cuenta antes de finalizar.")
+
+                elif metodo_pago == "Tarjeta (Débito/Crédito) 💳":
+                    referencia_pago = st.text_input("Número de Autorización / Voucher (Opcional):", placeholder="Ej. 004521")
+        else:
+            st.info("ℹ️ **Modo Presupuesto:** No se registrará inventario ni afectará el corte de caja general. Se generará un ticket con desglose de cotización.")
+
+        st.markdown("---")
+        col_acc1, col_acc2 = st.columns(2)
+        
+        with col_acc1:
+            if st.button("🗑️ Vaciar Carrito Completo", use_container_width=True):
+                st.session_state.carrito = []
+                st.rerun()
+
+        with col_acc2:
+            pago_valido = True
+            if tipo_operacion == "🛒 Venta Confirmada" and metodo_pago == "Efectivo 💵" and monto_recibido < total_general:
+                pago_valido = False
+
+            boton_habilitado = pago_valido and (horario_permitido or tipo_operacion == "📄 Presupuesto / Cotización")
+
+            texto_boton = "✅ Confirmar y Guardar Venta" if tipo_operacion == "🛒 Venta Confirmada" else "📄 Generar Presupuesto"
+            
+            if st.button(texto_boton, type="primary", use_container_width=True, disabled=not boton_habilitado):
+                ahora = datetime.now(zona_mx)
+                items_finales = []
+                for item in st.session_state.carrito:
+                    nivel_aplicado = nivel_global_alcanzado
+
+                    if nivel_aplicado == "Especial / Distribuidor (Precio 4)":
+                        p_unit = float(item["Precio_Especial"])
+                    elif nivel_aplicado == "Mayoreo Nivel 2 (Precio 3)":
+                        p_unit = float(item["Precio_Mayoreo_2"])
+                    elif nivel_aplicado == "Mayoreo Nivel 1 (Precio 2)":
+                        p_unit = float(item["Precio_Mayoreo_1"])
+                    else:
+                        p_unit = float(item["Precio_Menudeo"])
+
+                    t_linea = p_unit * item["Cantidad"]
+                    c_total = item["Costo_Unitario"] * item["Cantidad"]
+                    ganancia = t_linea - c_total
+
+                    items_finales.append({
+                        "Fecha": ahora.strftime("%Y-%m-%d"),
+                        "Sucursal": sucursal_activa,
+                        "Cliente": cliente.strip(),
+                        "Numero_Ticket": numero_ticket.strip(),
+                        "SKU": str(item["SKU"]),
+                        "Producto": str(item["Producto"]),
+                        "Nivel_Precio": str(nivel_aplicado),
+                        "Precio_Unitario": float(p_unit),
+                        "Costo_Unitario": float(item["Costo_Unitario"]),
+                        "Cantidad": float(item["Cantidad"]),
+                        "Total_Venta": float(t_linea),
+                        "Costo_Total": float(c_total),
+                        "Ganancia": float(ganancia),
+                        "Fecha_Hora": ahora.strftime("%Y-%m-%d %H:%M:%S"),
+                        "Tipo_Operacion": tipo_operacion,
+                        "Metodo_Pago": metodo_pago,
+                        "Monto_Recibido": float(monto_recibido),
+                        "Cambio": float(cambio),
+                        "Referencia": referencia_pago,
+                        "Atendido_Por": usuario_actual
+                    })
+
+                df_final_venta = pd.DataFrame(items_finales)
+                
+                exito = True
+                if tipo_operacion == "🛒 Venta Confirmada":
+                    exito = guardar_venta_db(df_final_venta)
+
+                if exito:
+                    if tipo_operacion == "🛒 Venta Confirmada":
+                        st.success(f"⭐ ¡Venta registrada con éxito (Folio: {numero_ticket.strip()})!")
+                    else:
+                        st.success(f"📄 ¡Presupuesto generado con éxito (Folio: {numero_ticket.strip()})!")
+                        
+                    st.session_state.ultimo_ticket = {
+                        "tipo_operacion": tipo_operacion,
+                        "numero_ticket": numero_ticket.strip(),
+                        "cliente": cliente.strip(),
+                        "sucursal": sucursal_activa,
+                        "atendido_por": usuario_actual,
+                        "fecha": ahora.strftime("%Y-%m-%d %H:%M:%S"),
+                        "items": items_finales,
+                        "total": total_general,
+                        "metodo_pago": metodo_pago,
+                        "monto_recibido": monto_recibido,
+                        "cambio": cambio,
+                        "referencia": referencia_pago
+                    }
+                    
+                    partes_t = numero_ticket.strip().split("-")
+                    if len(partes_t) >= 3 and partes_t[2].isdigit():
+                        siguiente_consecutivo = int(partes_t[2]) + 1
+                        st.session_state.numero_ticket_auto = f"TCK-{anio_actual}-{siguiente_consecutivo}"
+                else:
+                    st.error("Hubo un error al guardar la venta en la base de datos.")
+
+                st.session_state.carrito = []
+                st.rerun()
+    else:
+        st.info("El carrito está vacío. Agrega productos arriba.")
+
+    # --- VISUALIZADOR Y BOTÓN DE IMPRESIÓN BLUETOOTH MTP-2 ---
+    if "ultimo_ticket" in st.session_state and st.session_state.ultimo_ticket:
+        t = st.session_state.ultimo_ticket
+        st.markdown("---")
+        st.markdown("### 🖨️ Ticket Generado - Impresión Bluetooth MTP-2")
+        
+        lineas_js = ""
+        for itm in t["items"]:
+            prod_clean = str(itm['Producto']).replace('"', '\\"')
+            lineas_js += f'escpos += "{prod_clean}\\n";\n'
+            lineas_js += f'escpos += "  Cant: {int(itm["Cantidad"])} | Total: ${itm["Total_Venta"]:,.2f}\\n";\n'
+
+        sucursal_str = str(t['sucursal'])
+        atendido_str = str(t.get('atendido_por', usuario_actual))
+        fecha_str = str(t['fecha'])
+        cliente_str = str(t['cliente'])
+        num_ticket_str = str(t.get('numero_ticket', ''))
+        total_str = f"${t['total']:,.2f}"
+        tipo_op_str = str(t.get('tipo_operacion', 'VENTA'))
+        metodo_pago_str = str(t.get('metodo_pago', 'N/A'))
+        monto_recibido_val = float(t.get('monto_recibido', t['total']))
+        cambio_val = float(t.get('cambio', 0.0))
+
+        pago_info_html = ""
+        pago_info_escpos = ""
+        if "Venta" in tipo_op_str:
+            pago_info_html += f"Método: {metodo_pago_str}<br>"
+            pago_info_escpos += f"Metodo: {metodo_pago_str}\\n"
+            if "Efectivo" in metodo_pago_str:
+                pago_info_html += f"Recibido: ${monto_recibido_val:,.2f}<br>Cambio:${cambio_val:,.2f}<br>"
+                pago_info_escpos += f"Recibido: ${monto_recibido_val:,.2f}\\nCambio:${cambio_val:,.2f}\\n"
+
+        ticket_linea_html = f"<div style='text-align: center; font-size: 12px; font-weight: bold; margin: 4px 0;'>Folio: {num_ticket_str}</div>" if num_ticket_str else ""
+        ticket_linea_escpos = f"Folio: {num_ticket_str}\\n" if num_ticket_str else ""
+
+        items_html = '<br>'.join([f"{itm['Producto']}<br>&nbsp;&nbsp;Cant: {int(itm['Cantidad'])} | Total: ${itm['Total_Venta']:,.2f}" for itm in t['items']])
+
+        bluetooth_vta_html = f"""
+        <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px solid #ddd; max-width: 320px; font-family: 'Courier New', monospace;">
+            <div style="text-align: center; font-weight: bold; font-size: 14px;">TEXTILES CONCEPCION</div>
+            <div style="text-align: center; font-size: 11px; font-weight: bold;">*** {tipo_op_str.upper()} ***</div>
+            {ticket_linea_html}
+            <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
+            <div style="text-align: center; font-size: 11px;">Sucursal: {sucursal_str}</div>
+            <div style="text-align: center; font-size: 11px;">Atendió: {atendido_str}</div>
+            <div style="text-align: center; font-size: 11px;">{fecha_str}</div>
+            <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
+            <div style="font-size: 11px;">Cliente: {cliente_str}</div>
+            <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
+            <div style="font-size: 11px;">
+                {items_html}
+            </div>
+            <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
+            <div style="font-size: 11px;">
+                {pago_info_html}
+            </div>
+            <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
+            <div style="text-align: right; font-weight: bold; font-size: 13px;">TOTAL: {total_str}</div>
+            <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
+            
+            <!-- Datos de contacto y horario -->
+            <div style="text-align: center; font-size: 11px; margin: 8px 0;">
+                <b>Tel: 246 757 61 27</b><br>
+                Horario: 11:00 am a 7:00 pm
+            </div>
+            
+            <!-- Vista previa del código QR con textilanitmari.com -->
+            <div style="text-align: center; margin: 10px 0;">
+                <p style="font-size: 10px; margin-bottom: 4px;">Escanea para visitar nuestra web:</p>
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://textilanitmari.com" alt="QR Web" style="width: 100px; height: 100px;" />
+                <p style="font-size: 10px; font-weight: bold; margin-top: 4px;">www.textilanitmari.com</p>
+            </div>
+
+            <div style="text-align: center; font-size: 10px;">¡Gracias por su preferencia!</div>
+            
+            <br>
+            <div style="text-align: center;">
+                <button onclick="imprimirVentaMTP2()" style="padding: 12px 18px; font-weight: bold; background: #2e7d32; color: white; border: none; border-radius: 6px; cursor: pointer; width: 100%;">
+                    🦷 Imprimir Ticket en MTP-2
+                </button>
+                <p id="estado_vta_mtp" style="margin-top: 8px; font-size: 12px; color: #333;"></p>
+            </div>
+        </div>
+
+        <script>
+        async function imprimirVentaMTP2() {{
+            const estado = document.getElementById("estado_vta_mtp");
+            try {{
+                estado.innerText = "Conectando a impresora MTP-2...";
+                
+                const device = await navigator.bluetooth.requestDevice({{
+                    acceptAllDevices: true,
+                    optionalServices: [
+                        '0000ff00-0000-1000-8000-00805f9b34fb', 
+                        '00001101-0000-1000-8000-00805f9b34fb',
+                        '49535343-fe7d-4ae5-8fa9-9fafd205e455'
+                    ]
+                }});
+
+                const server = await device.gatt.connect();
+                const services = await server.getPrimaryServices();
+                
+                let writeCharacteristic = null;
+                for (const service of services) {{
+                    const characteristics = await service.getCharacteristics();
+                    for (const char of characteristics) {{
+                        if (char.properties.write || char.properties.writeWithoutResponse) {{
+                            writeCharacteristic = char;
+                            break;
+                        }}
+                    }}
+                    if (writeCharacteristic) break;
+                }}
+
+                if (!writeCharacteristic) {{
+                    throw new Error("No se encontró canal de escritura en la MTP-2.");
+                }}
+
+                estado.innerText = "Enviando ticket a MTP-2...";
+
+                let escpos = "\\x1B\\x40"; // Reset
+                escpos += "\\x1B\\x61\\x01"; // Centrar
+                escpos += "TEXTILES CONCEPCION\\n";
+                escpos += "*** {tipo_op_str.upper()} ***\\n";
+                {f'escpos += "{ticket_linea_escpos}\\n";' if num_ticket_str else ''}
+                escpos += "--------------------------------\\n";
+                escpos += "Sucursal: {sucursal_str}\\n";
+                escpos += "Atendio: {atendido_str}\\n";
+                escpos += "{fecha_str}\\n";
+                escpos += "--------------------------------\\n";
+                escpos += "\\x1B\\x61\\x00"; // Izquierda
+                escpos += "Cliente: {cliente_str}\\n";
+                escpos += "--------------------------------\\n";
+                
+                {lineas_js}
+
+                escpos += "--------------------------------\\n";
+                escpos += "{pago_info_escpos}";
+                escpos += "--------------------------------\\n";
+                escpos += "\\x1B\\x61\\x02"; // Derecha
+                escpos += "TOTAL: {total_str}\\n\\n";
+                
+                escpos += "\\x1B\\x61\\x01"; // Centrar
+                escpos += "Tel: 246 757 61 27\\n";
+                escpos += "Horario: 11:00 am a 7:00 pm\\n";
+                escpos += "Visita nuestra web:\\n";
+                escpos += "textilanitmari.com\\n";
+                escpos += "¡Gracias por su preferencia!\\n\\n\\n";
+
+                const encoder = new TextEncoder();
+                const data = encoder.encode(escpos);
+
+                const chunkSize = 100;
+                for (let i = 0; i < data.length; i += chunkSize) {{
+                    const chunk = data.slice(i, i + chunkSize);
+                    if (writeCharacteristic.properties.writeWithoutResponse) {{
+                        await writeCharacteristic.writeValueWithoutResponse(chunk);
+                    }} else {{
+                        await writeCharacteristic.writeValue(chunk);
+                    }}
+                    await new Promise(resolve => setTimeout(resolve, 30));
+                }}
+
+                estado.innerText = "✅ ¡Ticket impreso con éxito en MTP-2!";
+            }} catch (error) {{
+                estado.innerText = "❌ Error: " + error.message;
+            }}
+        }}
+        </script>
+        """
+        components.html(bluetooth_vta_html, height=620)
+        
+        if st.button("✖️ Cerrar Vista y Nuevo Ticket"):
+            del st.session_state.ultimo_ticket
+            st.rerun()
